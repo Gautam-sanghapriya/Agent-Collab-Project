@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+On Windows, you can also double-click `run-app.bat`. It installs dependencies if needed and starts the local dev server.
+
 ## Notes
 
 - The app stores session, admin, registration, and EmailJS configuration data in browser storage.
