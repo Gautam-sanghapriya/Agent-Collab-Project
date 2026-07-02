@@ -1,0 +1,989 @@
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Check, AlertCircle, Loader2, Download, Users, ClipboardList,
+  ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
+  ArrowUpDown, Plus, Calendar
+} from "lucide-react";
+
+const SESSIONS_KEY  = "ai-ready-sessions-1782870003";
+const ADMIN_KEY     = "ai-ready-admins-1782870003";
+const regKey = (sid) => `ai-ready-reg-1782870003-${sid}`;
+
+const BOOTSTRAP_PASSCODE = "aiready2026";
+const EMAILJS_KEY    = "ai-ready-emailjs-1782870003";
+
+// Shri Tech Partners brand tokens
+const C = {
+  bg:"#1b3a5c", bgPanel:"#0d1b2a", border:"rgba(0,174,239,0.10)",
+  text:"#FFFFFF", textDim:"rgba(255,255,255,0.70)", textFaint:"rgba(255,255,255,0.40)",
+  accent:"#00aeef", accentHover:"rgba(0,174,239,0.90)",
+  error:"#F87171", success:"#34D399", warn:"#FBBF24",
+};
+const glass = {
+  background:"rgba(13,27,42,0.6)", backdropFilter:"blur(16px)",
+  WebkitBackdropFilter:"blur(16px)", border:"1px solid rgba(0,174,239,0.1)",
+  borderRadius:16,
+};
+const iSty = { width:"100%", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", fontSize:13, color:C.text, outline:"none", transition:"all 300ms cubic-bezier(0.4,0,0.2,1)" };
+const fi = (e)=>{ e.target.style.borderColor="rgba(0,174,239,0.40)"; e.target.style.background="rgba(0,174,239,0.03)"; e.target.style.boxShadow="0 0 20px rgba(0,174,239,0.08)"; };
+const fo = (e)=>{ e.target.style.borderColor="rgba(255,255,255,0.06)"; e.target.style.background="rgba(255,255,255,0.03)"; e.target.style.boxShadow="none"; };
+const ctaHover = (e)=>{ e.currentTarget.style.background=C.accentHover; e.currentTarget.style.boxShadow="0 0 20px rgba(0,174,239,0.30)"; };
+const ctaLeave = (e)=>{ e.currentTarget.style.background=C.accent; e.currentTarget.style.boxShadow=""; };
+const secHover = (e)=>{ e.currentTarget.style.color="#fff"; e.currentTarget.style.borderColor="rgba(0,174,239,0.40)"; e.currentTarget.style.background="rgba(0,174,239,0.05)"; e.currentTarget.style.boxShadow="0 0 20px rgba(0,174,239,0.10)"; };
+const secLeave = (e)=>{ e.currentTarget.style.color=C.textFaint; e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background="transparent"; e.currentTarget.style.boxShadow="none"; };
+
+async function safeGet(key){
+  try{
+    if(window.storage?.get) return await window.storage.get(key,true);
+    const value = window.localStorage.getItem(key);
+    return value === null ? null : { value };
+  }catch{ return null; }
+}
+async function safeSave(key,val){
+  try{
+    const value = JSON.stringify(val);
+    if(window.storage?.set){
+      const r=await window.storage.set(key,value,true);
+      return !!r;
+    }
+    window.localStorage.setItem(key,value);
+    return true;
+  }catch{ return false; }
+}
+async function hashPC(text){ const e=new TextEncoder().encode(text); const d=await crypto.subtle.digest("SHA-256",e); return Array.from(new Uint8Array(d)).map(b=>b.toString(16).padStart(2,"0")).join(""); }
+const uid=()=>crypto.randomUUID();
+const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+async function copyToClipboard(text){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text); return true;
+    }
+  }catch(e){}
+  // Fallback: textarea + execCommand
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok=document.execCommand("copy");
+    document.body.removeChild(ta); return ok;
+  }catch(e){ return false; }
+}
+
+const fmt=(iso)=>iso?new Date(iso).toLocaleString():"—";
+
+export default function App(){
+  const [view,setView]=useState("register");
+  return(
+    <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
+      <style>{`.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
+      <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:C.accentHover,opacity:.14,filter:"blur(100px)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
+        <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(11,37,71,.8)",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:10}}>
+          <div style={{maxWidth:980,margin:"0 auto",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:8,height:8,borderRadius:"50%",background:C.accent}}/>
+              <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.15em",color:C.textFaint,textTransform:"uppercase"}}>AI Ready</span>
+            </div>
+            <button onClick={()=>setView(v=>v==="register"?"admin":"register")} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              {view==="register"?<><ShieldCheck size={14}/>Admin</>:<>← Registration</>}
+            </button>
+          </div>
+        </div>
+        <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 16px 32px"}}>
+          {view==="register"?<RegisterView/>:<AdminView/>}
+        </div>
+        <div style={{textAlign:"center",paddingBottom:20,fontSize:10,fontFamily:"monospace",color:C.textFaint}}>
+          Registrations are stored securely and never shared with third parties.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── EmailJS helper ──────────────────────────────────────────────────────────
+async function sendOtpEmail(cfg, toEmail, toName, otpCode, sessionTitle) {
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id:   cfg.serviceId,
+      template_id:  cfg.templateId,
+      user_id:      cfg.publicKey,
+      template_params: {
+        to_name:       toName,
+        to_email:      toEmail,
+        otp_code:      otpCode,
+        session_title: sessionTitle,
+        expiry_minutes: "5",
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+function gen4DigitOtp() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGISTER VIEW  (public-facing) — 3 steps: form → otp → success
+// ═══════════════════════════════════════════════════════════════════════════
+function RegisterView(){
+  const [sessions,  setSessions]  = useState([]);
+  const [sess,      setSess]      = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [ejsCfg,    setEjsCfg]    = useState(null); // { serviceId, templateId, publicKey }
+
+  // Step 1 — form
+  const [name,      setName]      = useState("");
+  const [email,     setEmail]     = useState("");
+  const [nameErr,   setNameErr]   = useState("");
+  const [emailErr,  setEmailErr]  = useState("");
+
+  // Step 2 — OTP
+  const [step,      setStep]      = useState("form"); // form | otp | success
+  const [otp,       setOtp]       = useState("");          // stored OTP (memory only)
+  const [otpSentAt, setOtpSentAt] = useState(null);
+  const [otpInput,  setOtpInput]  = useState("");
+  const [otpErr,    setOtpErr]    = useState("");
+  const [attempts,  setAttempts]  = useState(0);
+  const [sending,   setSending]   = useState(false);
+  const [sendErr,   setSendErr]   = useState("");
+  const [cooldown,  setCooldown]  = useState(0);   // seconds until resend allowed
+  const [timeLeft,  setTimeLeft]  = useState(300); // seconds until OTP expires
+
+  useEffect(()=>{
+    (async()=>{
+      const r  = await safeGet(SESSIONS_KEY);
+      const list = r ? JSON.parse(r.value) : [];
+      setSessions(list);
+      if(list.length === 1) setSess(list[0]);
+      // Load EmailJS config
+      const er = await safeGet(EMAILJS_KEY);
+      if(er) setEjsCfg(JSON.parse(er.value));
+      setLoading(false);
+    })();
+  },[]);
+
+  // Countdown timers
+  useEffect(()=>{
+    if(step !== "otp") return;
+    const id = setInterval(()=>{
+      const elapsed = Math.floor((Date.now() - otpSentAt) / 1000);
+      setTimeLeft(Math.max(0, 300 - elapsed));
+      setCooldown(c => Math.max(0, c - 1));
+    }, 1000);
+    return ()=> clearInterval(id);
+  },[step, otpSentAt]);
+
+  const validateForm = () => {
+    let ok = true;
+    if(!name.trim()){ setNameErr("Required"); ok=false; } else setNameErr("");
+    if(!email.trim()){ setEmailErr("Required"); ok=false; }
+    else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())){ setEmailErr("Enter a valid email"); ok=false; }
+    else setEmailErr("");
+    return ok;
+  };
+
+  const sendOtp = async () => {
+    if(!validateForm() || !sess) return;
+    setSending(true); setSendErr("");
+    // Check if already registered
+    const key = regKey(sess.id);
+    const ex  = await safeGet(key);
+    const list = ex ? JSON.parse(ex.value) : [];
+    if(list.some(r => r.email === email.trim().toLowerCase())){
+      setSendErr("This email is already registered for this session.");
+      setSending(false); return;
+    }
+    if(!ejsCfg || !ejsCfg.serviceId){
+      setSendErr("Email service is not configured yet. Please contact the organiser.");
+      setSending(false); return;
+    }
+    const code = gen4DigitOtp();
+    try {
+      await sendOtpEmail(ejsCfg, email.trim(), name.trim(), code, sess.title);
+      setOtp(code);
+      setOtpSentAt(Date.now());
+      setOtpInput(""); setOtpErr(""); setAttempts(0);
+      setTimeLeft(300); setCooldown(60);
+      setStep("otp");
+    } catch(e) {
+      const detail = (e && e.message) ? String(e.message).slice(0,200) : "Unknown error";
+      setSendErr("Failed to send OTP: " + detail);
+    }
+    setSending(false);
+  };
+
+  const verifyOtp = async () => {
+    if(timeLeft <= 0){ setOtpErr("OTP expired. Please request a new one."); return; }
+    if(otpInput.trim() !== otp){
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+      if(newAttempts >= 3) setOtpErr("Too many wrong attempts. Please request a new OTP.");
+      else setOtpErr(`Incorrect code. ${3 - newAttempts} attempt${3-newAttempts===1?"":"s"} left.`);
+      return;
+    }
+    // OTP correct — complete registration
+    setSending(true);
+    const key  = regKey(sess.id);
+    const ex   = await safeGet(key);
+    const list = ex ? JSON.parse(ex.value) : [];
+    list.push({ name: name.trim(), email: email.trim().toLowerCase(), registeredAt: new Date().toISOString(), verified: true });
+    const ok = await safeSave(key, list);
+    if(ok) setStep("success");
+    else setOtpErr("Registration failed. Please try again.");
+    setSending(false);
+  };
+
+  const resendOtp = async () => {
+    if(cooldown > 0 || attempts >= 3 && timeLeft > 0) return;
+    setSending(true); setSendErr("");
+    const code = gen4DigitOtp();
+    try {
+      await sendOtpEmail(ejsCfg, email.trim(), name.trim(), code, sess.title);
+      setOtp(code); setOtpSentAt(Date.now());
+      setOtpInput(""); setOtpErr(""); setAttempts(0);
+      setTimeLeft(300); setCooldown(60);
+    } catch(e) { const detail=(e&&e.message)?String(e.message).slice(0,200):"Unknown error"; setSendErr("Failed to resend: "+detail); }
+    setSending(false);
+  };
+
+  const fmtTime = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+  const inpStyle = (err) => ({...iSty, border:`1px solid ${err?C.error+"CC":"rgba(255,255,255,0.06)"}`, fontSize:14, padding:"12px 16px", borderRadius:12, marginBottom: err?2:12});
+  const lbl = (t) => <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>{t} <span style={{color:C.accent}}>*</span></label>;
+
+  if(loading) return(
+    <div style={{display:"flex",alignItems:"center",gap:8,color:C.textFaint,marginTop:60}}>
+      <Loader2 size={16} className="animate-spin"/>Loading...
+    </div>
+  );
+
+  if(sessions.length === 0) return(
+    <div style={{maxWidth:420,padding:36,textAlign:"center",...glass,marginTop:20}}>
+      <Calendar size={28} color={C.textFaint} style={{margin:"0 auto 12px"}}/>
+      <h2 style={{fontSize:18,fontWeight:600,marginBottom:8}}>No sessions available</h2>
+      <p style={{fontSize:14,color:C.textDim,lineHeight:1.6}}>There are no open sessions right now. Check back soon.</p>
+    </div>
+  );
+
+  // ── Session picker ────────────────────────────────────────────────────────
+  if(!sess) return(
+    <div style={{width:"100%",maxWidth:480,marginTop:20}}>
+      <div style={{padding:"28px 32px 24px",...glass,marginBottom:16}}>
+        <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>AI Ready · Registration</p>
+        <h1 style={{fontSize:22,fontWeight:700,marginBottom:6}}>Select your session</h1>
+        <p style={{fontSize:13,color:C.textDim}}>Choose the session you'd like to register for.</p>
+      </div>
+      <div style={{display:"grid",gap:10}}>
+        {sessions.map(s=>(
+          <button key={s.id} onClick={()=>setSess(s)}
+            style={{...glass,borderRadius:12,padding:"16px 20px",cursor:"pointer",textAlign:"left",width:"100%",transition:"border-color .2s",minHeight:84,boxSizing:"border-box"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+            onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(0,174,239,0.1)"}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,margin:"0 0 5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</p>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:10,fontFamily:"monospace",color:C.accent,background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:4,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{s.id}</span>
+                  {s.date&&<span style={{fontSize:11,color:C.textFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.date}</span>}
+                </div>
+              </div>
+              <span style={{fontSize:14,color:C.accent,flexShrink:0}}>→</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ── Success ───────────────────────────────────────────────────────────────
+  if(step === "success") return(
+    <div style={{maxWidth:440,padding:36,textAlign:"center",...glass,marginTop:20}}>
+      <div style={{width:52,height:52,margin:"0 auto 16px",borderRadius:"50%",background:`${C.accent}1A`,border:`1px solid ${C.accent}4D`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <Check color={C.accent} size={24}/>
+      </div>
+      <h2 style={{fontSize:20,fontWeight:700,marginBottom:8}}>You're registered!</h2>
+      <p style={{fontSize:14,color:C.textDim,lineHeight:1.6,marginBottom:4}}><span style={{color:C.text,fontWeight:600}}>{sess.title}</span></p>
+      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:16}}>{sess.date}</p>}
+      <p style={{fontSize:13,color:C.textDim}}>Your email <span style={{color:C.text}}>{email}</span> has been verified and your spot is confirmed.</p>
+      <div style={{display:"flex",gap:10,justifyContent:"center",marginTop:20,flexWrap:"wrap"}}>
+        <button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");}} style={{fontFamily:"monospace",fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
+        {sessions.length>1&&<button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
+      </div>
+    </div>
+  );
+
+  // ── OTP Verification step ─────────────────────────────────────────────────
+  if(step === "otp") return(
+    <div style={{width:"100%",maxWidth:420,padding:36,...glass,marginTop:20}}>
+      {sessions.length>1&&(
+        <button onClick={()=>setStep("form")} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>← Back</button>
+      )}
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Email Verification</p>
+      <h1 style={{fontSize:20,fontWeight:700,lineHeight:1.3,marginBottom:12}}>Enter your OTP</h1>
+      <div style={{background:"rgba(0,174,239,0.08)",border:"1px solid rgba(0,174,239,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:20}}>
+        <p style={{fontSize:13,color:C.textDim,lineHeight:1.5,margin:0}}>
+          A 4-digit code was sent to <span style={{color:C.text,fontWeight:600}}>{email}</span>. Enter it below to confirm your registration.
+        </p>
+      </div>
+
+      {/* Timer */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <span style={{fontSize:12,color:timeLeft<60?C.error:C.textFaint}}>
+          {timeLeft > 0 ? <>Expires in <span style={{fontFamily:"monospace",fontWeight:600}}>{fmtTime(timeLeft)}</span></> : "OTP expired"}
+        </span>
+        <button onClick={resendOtp} disabled={cooldown>0||sending||attempts<3&&timeLeft>0}
+          style={{fontSize:12,color:cooldown>0||sending||attempts<3&&timeLeft>0?C.textFaint:C.accent,background:"transparent",border:"none",cursor:cooldown>0||sending||attempts<3&&timeLeft>0?"default":"pointer",textDecoration:"underline",padding:0}}>
+          {cooldown>0?`Resend in ${cooldown}s`:"Resend OTP"}
+        </button>
+      </div>
+
+      {/* OTP input */}
+      <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>4-DIGIT CODE</label>
+      <div onKeyDown={e=>{if(e.key==="Enter"&&!sending&&attempts<3&&timeLeft>0) verifyOtp();}}>
+        <input
+          type="text" inputMode="numeric" maxLength={4}
+          value={otpInput} onChange={e=>{ setOtpInput(e.target.value.replace(/\D/g,"")); setOtpErr(""); }}
+          placeholder="••••"
+          style={{...iSty, fontSize:28, padding:"12px 14px", borderRadius:12, letterSpacing:"0.4em", textAlign:"center", marginBottom: otpErr?4:12,
+            border:`1px solid ${otpErr?C.error+"CC":"rgba(255,255,255,0.06)"}`}}
+          onFocus={fi} onBlur={fo}
+          autoFocus
+        />
+        {otpErr&&<p style={{fontSize:12,color:C.error,marginBottom:12}}>{otpErr}</p>}
+        {sendErr&&<p style={{fontSize:12,color:C.error,marginBottom:12}}>{sendErr}</p>}
+        <button onClick={verifyOtp} disabled={otpInput.length!==4||sending||attempts>=3||timeLeft<=0}
+          className={otpInput.length!==4||sending||attempts>=3||timeLeft<=0?"":"neon-glow"}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:otpInput.length!==4||sending||attempts>=3||timeLeft<=0?"default":"pointer",opacity:otpInput.length!==4||attempts>=3||timeLeft<=0?.5:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(otpInput.length===4&&!sending&&attempts<3&&timeLeft>0)ctaHover(e);}}
+          onMouseLeave={ctaLeave}>
+          {sending?<><Loader2 size={14} className="animate-spin"/>Verifying...</>:"Verify & Register"}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Step 1: Registration form ─────────────────────────────────────────────
+  return(
+    <div style={{width:"100%",maxWidth:440,padding:36,...glass,marginTop:20}}>
+      {sessions.length>1&&(
+        <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>
+          ← All sessions
+        </button>
+      )}
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Registration · {sess.id}</p>
+      <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,marginBottom:4}}>{sess.title}</h1>
+      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:4}}>{sess.date}</p>}
+      {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.5,marginBottom:20}}>{sess.description}</p>}
+      <div onKeyDown={e=>{if(e.key==="Enter"&&!sending) sendOtp();}}>
+        {lbl("FULL NAME")}
+        <input type="text" value={name} onChange={e=>{setName(e.target.value);setNameErr("");}} placeholder="Ada Lovelace" style={inpStyle(nameErr)} onFocus={fi} onBlur={fo}/>
+        {nameErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{nameErr}</p>}
+        {lbl("EMAIL ADDRESS")}
+        <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailErr("");}} placeholder="ada@company.com" style={inpStyle(emailErr)} onFocus={fi} onBlur={fo}/>
+        {emailErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{emailErr}</p>}
+        {sendErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:12,padding:"9px 12px",marginBottom:12}}><AlertCircle size={14} style={{flexShrink:0,marginTop:2}}/>{sendErr}</div>}
+        <button onClick={sendOtp} disabled={sending}
+          className={sending?"":"neon-glow"}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:sending?"default":"pointer",opacity:sending?.6:1,marginTop:4,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(!sending)ctaHover(e);}}
+          onMouseLeave={ctaLeave}>
+          {sending?<><Loader2 size={14} className="animate-spin"/>Sending OTP...</>:"Send OTP"}
+        </button>
+        <p style={{fontSize:11,color:C.textFaint,textAlign:"center",marginTop:10}}>A 4-digit code will be sent to your email to verify your registration.</p>
+      </div>
+    </div>
+  );
+}
+
+
+function AdminView(){
+  const [authed,setAuthed]=useState(false);
+  const [aName,setAName]=useState(""); const [pc,setPc]=useState("");
+  const [authErr,setAuthErr]=useState(""); const [authBusy,setAuthBusy]=useState(false);
+  const [admins,setAdmins]=useState([]); const [me,setMe]=useState(null);
+  const [tab,setTab]=useState("sessions");
+  const [sessions,setSessions]=useState([]);
+  const [selSid,setSelSid]=useState(null);
+  const [allRegs,setAllRegs]=useState({});
+  const [dl,setDl]=useState(true);
+
+  const loadAll=useCallback(async()=>{
+    setDl(true);
+    const sr=await safeGet(SESSIONS_KEY);
+    const list=sr?JSON.parse(sr.value):[];
+    setSessions(list);
+    const map={};
+    for(const s of list){const r=await safeGet(regKey(s.id));map[s.id]=r?JSON.parse(r.value):[];}
+    setAllRegs(map);
+    if(list.length>0) setSelSid(s=>(s&&list.find(x=>x.id===s))?s:(list.find(x=>x.active)||list[0]).id);
+    setDl(false);
+  },[]);
+
+  const loadAdmins=useCallback(async()=>{const r=await safeGet(ADMIN_KEY);const l=r?JSON.parse(r.value):[];setAdmins(l);return l;},[]);
+  useEffect(()=>{if(authed){loadAll();loadAdmins();}},[authed]);
+
+  const handleAuth=async()=>{
+    setAuthBusy(true);setAuthErr("");
+    const hash=await hashPC(pc);
+    let list=await loadAdmins();
+    if(list.length===0){
+      if(pc===BOOTSTRAP_PASSCODE){
+        const owner={id:uid(),name:aName.trim()||"Owner",passcodeHash:hash};
+        await safeSave(ADMIN_KEY,[owner]);setAdmins([owner]);setMe({id:owner.id,name:owner.name});
+        setAuthed(true);setPc("");setAName("");setAuthBusy(false);return;
+      }
+      setAuthErr("Incorrect admin name or passcode.");setAuthBusy(false);return;
+    }
+    const nl=aName.trim().toLowerCase();
+    const match=list.find(a=>a.name.toLowerCase()===nl&&a.passcodeHash===hash);
+    if(match){setMe({id:match.id,name:match.name});setAuthed(true);setPc("");setAName("");}
+    else setAuthErr("Incorrect admin name or passcode.");
+    setAuthBusy(false);
+  };
+
+  if(!authed) return(
+    <div style={{width:"100%",maxWidth:380,padding:32,...glass,marginTop:20}}>
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:10}}>Admin</p>
+      <h1 style={{fontSize:20,fontWeight:600,marginBottom:20}}>Sign in</h1>
+      <div onKeyDown={e=>{if(e.key==="Enter")handleAuth();}}>
+        <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>ADMIN NAME</label>
+        <input type="text" value={aName} onChange={e=>setAName(e.target.value)} placeholder="e.g. Owner" autoFocus style={{...iSty,marginBottom:12,fontSize:14}} onFocus={fi} onBlur={fo}/>
+        <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>PASSCODE</label>
+        <input type="password" value={pc} onChange={e=>setPc(e.target.value)} placeholder="••••••••" style={{...iSty,marginBottom:12,fontSize:14}} onFocus={fi} onBlur={fo}/>
+        {authErr&&<p style={{fontSize:11,color:C.error,marginBottom:12}}>{authErr}</p>}
+        <button type="button" onClick={handleAuth} disabled={authBusy} style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"10px",cursor:authBusy?"default":"pointer",opacity:authBusy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(!authBusy)ctaHover(e);}} onMouseLeave={ctaLeave}>
+          {authBusy?<><Loader2 size={14} className="animate-spin"/>Checking...</>:"Sign in"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const TABS=[["sessions","Sessions"],["registrations","Registrations"],["settings","Settings"]];
+  return(
+    <div style={{width:"100%",maxWidth:980,marginTop:20}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <div>
+          <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:4}}>Admin · {me?.name}</p>
+          <h1 style={{fontSize:20,fontWeight:700}}>Dashboard</h1>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          {TABS.map(([t,l])=>(
+            <button key={t} onClick={()=>setTab(t)} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${tab===t?C.accent:C.border}`,color:tab===t?C.accent:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {tab==="sessions"&&<SessionsTab sessions={sessions} setSessions={setSessions} allRegs={allRegs} selSid={selSid} setSelSid={setSelSid} setTab={setTab} reload={loadAll}/>}
+      {tab==="registrations"&&<RegistrationsTab sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
+      {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} setAuthed={setAuthed} setMe={setMe}/>}
+    </div>
+  );
+}
+
+function StatCard({label,value,small}){
+  return(
+    <div style={{...glass,padding:"16px 20px"}}>
+      <p style={{fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>{label}</p>
+      <p style={{fontSize:small?14:24,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value}</p>
+    </div>
+  );
+}
+
+function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
+  const [showForm,setShowForm]=useState(false);
+  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState("");
+  const [fErr,setFErr]=useState(""); const [busy,setBusy]=useState(false);
+  const [confDel,setConfDel]=useState(null);
+  const [editSid,setEditSid]=useState(null);    // session being edited
+  const [editDraft,setEditDraft]=useState({});   // { title, date, description }
+  const [editErr,setEditErr]=useState("");
+  const [editBusy,setEditBusy]=useState(false);
+
+  const create=async()=>{
+    if(!title.trim()){setFErr("Session title is required.");return;}
+    setBusy(true);setFErr("");
+    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),active:sessions.length===0,createdAt:new Date().toISOString()};
+    const next=[...sessions,s];
+    const ok=await safeSave(SESSIONS_KEY,next);
+    if(ok){setSessions(next);setTitle("");setDesc("");setDate("");setShowForm(false);}
+    else setFErr("Failed to save.");
+    setBusy(false);
+  };
+
+  const startEdit=(s)=>{
+    setEditSid(s.id);
+    setEditDraft({title:s.title,date:s.date||"",description:s.description||""});
+    setEditErr("");
+    setConfDel(null);
+  };
+  const cancelEdit=()=>{ setEditSid(null); setEditDraft({}); setEditErr(""); };
+
+  const saveEdit=async()=>{
+    if(!editDraft.title?.trim()){setEditErr("Title is required.");return;}
+    setEditBusy(true);setEditErr("");
+    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim()}:s);
+    const ok=await safeSave(SESSIONS_KEY,next);
+    if(ok){setSessions(next);cancelEdit();}
+    else setEditErr("Failed to save. Try again.");
+    setEditBusy(false);
+  };
+
+  const del=async(sid)=>{
+    const next=sessions.filter(s=>s.id!==sid);
+    if(await safeSave(SESSIONS_KEY,next)){
+      setSessions(next);setConfDel(null);
+      if(selSid===sid&&next.length>0) setSelSid(next[0].id);
+    }
+  };
+
+  const totalRegs=Object.values(allRegs).reduce((a,b)=>a+b.length,0);
+  const uniqueUsers=new Set(Object.values(allRegs).flat().map(r=>r.email)).size;
+
+  return(
+    <div style={{display:"grid",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
+        <StatCard label="Total Sessions" value={sessions.length}/>
+        <StatCard label="Total Registrations" value={totalRegs}/>
+        <StatCard label="Unique Attendees" value={uniqueUsers}/>
+      </div>
+
+      <div style={{...glass,padding:20}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <h2 style={{fontSize:15,fontWeight:600}}>All sessions</h2>
+          <button onClick={()=>{setShowForm(f=>!f);cancelEdit();}} onMouseEnter={ctaHover} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:12,border:"none",borderRadius:12,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+            <Plus size={14}/>New session
+          </button>
+        </div>
+
+        {showForm&&(
+          <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:14,display:"grid",gap:10}}>
+            <h3 style={{fontSize:13,fontWeight:600,color:C.textDim}}>Create new session</h3>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION TITLE *</label>
+              <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. AI Basics for Teams" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+            </div>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
+              <input value={date} onChange={e=>setDate(e.target.value)} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+            </div>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
+              <textarea value={desc} onChange={e=>setDesc(e.target.value)} rows={2} placeholder="Short description shown on the registration form..." style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+            </div>
+            {fErr&&<p style={{fontSize:12,color:C.error}}>{fErr}</p>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={create} disabled={busy} onMouseEnter={e=>{if(!busy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:busy?"default":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+                {busy?<><Loader2 size={13} className="animate-spin"/>Creating...</>:"Create session"}
+              </button>
+              <button onClick={()=>{setShowForm(false);setFErr("");}} onMouseEnter={secHover} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {sessions.length===0?(
+          <div style={{textAlign:"center",padding:"40px 0",color:C.textFaint,fontSize:14}}>No sessions yet. Create your first one above.</div>
+        ):(
+          <div style={{display:"grid",gap:8}}>
+            {sessions.map(s=>{
+              const count=(allRegs[s.id]||[]).length;
+              const isDel=confDel===s.id;
+              const isEdit=editSid===s.id;
+              return(
+                <div key={s.id} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${isEdit?C.accent+"99":s.active?C.accent+"44":C.border}`,borderRadius:12,padding:"14px 16px",display:"grid",gap:10}}>
+                  {isEdit?(
+                    /* ── Edit mode ── */
+                    <div style={{display:"grid",gap:10}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                        <span style={{fontSize:10,fontFamily:"monospace",color:C.accent}}>Editing · {s.id}</span>
+                      </div>
+                      <div>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION TITLE *</label>
+                        <input value={editDraft.title} onChange={e=>setEditDraft(d=>({...d,title:e.target.value}))} style={{...iSty,marginTop:5,fontSize:14}} onFocus={fi} onBlur={fo}/>
+                      </div>
+                      <div>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
+                        <input value={editDraft.date} onChange={e=>setEditDraft(d=>({...d,date:e.target.value}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+                      </div>
+                      <div>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
+                        <textarea value={editDraft.description} onChange={e=>setEditDraft(d=>({...d,description:e.target.value}))} rows={2} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+                      </div>
+                      {editErr&&<p style={{fontSize:12,color:C.error}}>{editErr}</p>}
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={saveEdit} disabled={editBusy} onMouseEnter={e=>{if(!editBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"7px 14px",cursor:editBusy?"default":"pointer",opacity:editBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+                          {editBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save changes"}
+                        </button>
+                        <button onClick={cancelEdit} onMouseEnter={secHover} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:12,padding:"7px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Cancel</button>
+                      </div>
+                    </div>
+                  ):(
+                    /* ── View mode ── */
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          {s.active&&<span style={{fontSize:10,fontFamily:"monospace",background:C.accent,color:C.bg,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Pinned</span>}
+                          <span style={{fontSize:10,fontFamily:"monospace",color:C.textFaint}}>{s.id}</span>
+                        </div>
+                        <p style={{fontSize:14,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p>
+                        <p style={{fontSize:12,color:C.textFaint}}>{s.date||"No date set"} · {count} registrant{count!==1?"s":""}</p>
+                        {s.description&&<p style={{fontSize:12,color:C.textDim,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.description}</p>}
+                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                        <button onClick={()=>startEdit(s)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"5px 7px",cursor:"pointer",display:"flex",alignItems:"center"}} title="Edit session">
+                          <Pencil size={13}/>
+                        </button>
+                        <button onClick={()=>{setSelSid(s.id);setTab("registrations");}} style={{fontSize:12,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}><Users size={12}/>View</button>
+                        {isDel?(
+                          <><span style={{fontSize:12,color:C.error}}>Delete?</span>
+                          <button onClick={()=>del(s.id)} style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:6,padding:"5px 10px",cursor:"pointer"}}>Confirm</button>
+                          <button onClick={()=>setConfDel(null)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"5px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button></>
+                        ):(
+                          <button onClick={()=>{setConfDel(s.id);cancelEdit();}} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"5px 7px",cursor:"pointer",display:"flex"}}><Trash2 size={13}/></button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,reload}){
+  const [query,setQuery]=useState("");
+  const [sk,setSk]=useState("registeredAt"); const [sd,setSd]=useState("desc");
+  const [editEmail,setEditEmail]=useState(null); const [draft,setDraft]=useState({});
+  const [editErr,setEditErr]=useState("");
+  const [confDel,setConfDel]=useState(null);
+  const [actErr,setActErr]=useState("");
+  const [saving,setSaving]=useState(false);
+
+  const sess=sessions.find(s=>s.id===selSid);
+  const regs=allRegs[selSid]||[];
+
+  const emailSessMap=useMemo(()=>{
+    const m={};
+    for(const[sid,list] of Object.entries(allRegs)){
+      for(const r of list){const e=(r.email||"").toLowerCase();if(!m[e])m[e]=[];if(!m[e].includes(sid))m[e].push(sid);}
+    }
+    return m;
+  },[allRegs]);
+
+  const getSt=(email,sid)=>{
+    const e=email.toLowerCase();
+    const prev=(emailSessMap[e]||[]).filter(s=>s!==sid);
+    if(prev.length===0) return{label:"New",color:C.success};
+    return{label:`Returning (${prev.length})`,color:C.warn};
+  };
+
+  const display=useMemo(()=>{
+    const q=query.trim().toLowerCase();
+    let l=regs;
+    if(q) l=l.filter(r=>r.name?.toLowerCase().includes(q)||r.email?.toLowerCase().includes(q));
+    return[...l].sort((a,b)=>{
+      const av=(a[sk]||"").toString().toLowerCase(),bv=(b[sk]||"").toString().toLowerCase();
+      if(av<bv) return sd==="asc"?-1:1; if(av>bv) return sd==="asc"?1:-1; return 0;
+    });
+  },[regs,query,sk,sd]);
+
+  const tSort=(k)=>{if(sk===k)setSd(d=>d==="asc"?"desc":"asc");else{setSk(k);setSd("asc");}};
+  const sIcon=(k)=>sk!==k?<ArrowUpDown size={11} style={{opacity:.5}}/>:sd==="asc"?<ArrowUp size={11}/>:<ArrowDown size={11}/>;
+
+  const persist=async(next)=>{
+    setSaving(true);setActErr("");
+    const ok=await safeSave(regKey(selSid),next);
+    if(ok) setAllRegs(p=>({...p,[selSid]:next}));
+    else setActErr("Couldn't save. Please try again.");
+    setSaving(false);return ok;
+  };
+
+  const saveEdit=async()=>{
+    const n=(draft.name||"").trim(),e=(draft.email||"").trim().toLowerCase();
+    if(!n){setEditErr("Name is required.");return;}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){setEditErr("Enter a valid email.");return;}
+    if(regs.some(r=>r.email!==editEmail&&r.email===e)){setEditErr("Email already in use.");return;}
+    const next=regs.map(r=>r.email===editEmail?{...r,...draft,email:e}:r);
+    const ok=await persist(next);
+    if(ok){setEditEmail(null);setDraft({});setEditErr("");}
+  };
+
+  const delReg=async(email)=>{
+    const ok=await persist(regs.filter(r=>r.email!==email));
+    if(ok) setConfDel(null);
+  };
+
+  const exportCsv=()=>{
+    const hdr=["Name","Email","Registered At","Status"];
+    const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.email,fmt(r.registeredAt),st.label];});
+    const csv = [hdr,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `registrations-${selSid}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  if(loading) return<div style={{...glass,padding:28,display:"flex",alignItems:"center",gap:8,color:C.textFaint,justifyContent:"center"}}><Loader2 size={16} className="animate-spin"/>Loading...</div>;
+
+  const newCount=regs.filter(r=>getSt(r.email,selSid).label==="New").length;
+  const retCount=regs.length-newCount;
+
+  return(
+    <div style={{...glass,padding:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <select value={selSid||""} onChange={e=>setSelSid(e.target.value)} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:C.text,outline:"none",cursor:"pointer",flex:1,minWidth:200}}>
+          {sessions.map(s=><option key={s.id} value={s.id} style={{background:C.bgPanel}}>{s.active?"● ":""}{s.title} [{s.id}]</option>)}
+        </select>
+        <button onClick={reload} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.border}`,color:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>Refresh</button>
+        <button onClick={exportCsv} disabled={display.length===0} onMouseEnter={e=>{if(display.length>0)ctaHover(e);}} onMouseLeave={ctaLeave} style={{fontFamily:"monospace",fontSize:12,background:C.accent,color:C.bg,fontWeight:600,border:"none",borderRadius:12,padding:"7px 12px",display:"flex",alignItems:"center",gap:6,cursor:display.length===0?"default":"pointer",opacity:display.length===0?.4:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          <Download size={13}/>Export
+        </button>
+      </div>
+
+      {sess&&(
+        <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <div>
+            <span style={{fontSize:13,fontWeight:600,color:C.textDim}}>{sess.title}</span>
+            {sess.date&&<span style={{fontSize:11,color:C.textFaint,marginLeft:8}}>{sess.date}</span>}
+          </div>
+          <div style={{display:"flex",gap:14,fontSize:12}}>
+            <span style={{color:C.textFaint}}>Total <span style={{color:C.text,fontWeight:700}}>{regs.length}</span></span>
+            <span style={{color:C.textFaint}}>New <span style={{color:C.success,fontWeight:700}}>{newCount}</span></span>
+            <span style={{color:C.textFaint}}>Returning <span style={{color:C.warn,fontWeight:700}}>{retCount}</span></span>
+          </div>
+        </div>
+      )}
+
+      <div style={{position:"relative",marginBottom:12}}>
+        <Search size={13} color={C.textFaint} style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}/>
+        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name or email..." style={{...iSty,paddingLeft:32}}/>
+      </div>
+
+      {actErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:8,padding:"8px 12px",marginBottom:10}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{actErr}</div>}
+
+      {regs.length===0?(
+        <div style={{textAlign:"center",padding:"48px 0",border:`1px dashed ${C.border}`,borderRadius:12}}>
+          <ClipboardList size={22} color={C.border} style={{margin:"0 auto 10px"}}/>
+          <p style={{fontSize:14,color:C.textFaint}}>No registrations yet for this session.</p>
+        </div>
+      ):display.length===0?(
+        <div style={{textAlign:"center",padding:"32px 0",color:C.textFaint,fontSize:14}}>No results match "{query}".</div>
+      ):(
+        <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
+          <table style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:580}}>
+            <thead>
+              <tr style={{background:"rgba(255,255,255,0.06)"}}>
+                {[["name","Name"],["email","Email"],["registeredAt","Registered"],["status","Status"]].map(([k,l])=>(
+                  <th key={k} onClick={()=>k!=="status"&&tSort(k)} style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap",textAlign:"left",cursor:k!=="status"?"pointer":"default",userSelect:"none"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}>{l}{k!=="status"&&sIcon(k)}</span>
+                  </th>
+                ))}
+                <th style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase"}}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {display.map(reg=>{
+                const st=getSt(reg.email,selSid);
+                const isEd=editEmail===reg.email;
+                const isDel=confDel===reg.email;
+                return(
+                  <tr key={reg.email} style={{borderTop:`1px solid ${C.border}`,background:isEd?"rgba(0,174,239,0.07)":"transparent"}}>
+                    <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                      {isEd?<input value={draft.name||""} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:130}}/>:reg.name}
+                    </td>
+                    <td style={{padding:"9px 14px",whiteSpace:"nowrap",color:C.textDim}}>
+                      {isEd?<input type="email" value={draft.email||""} onChange={e=>setDraft(d=>({...d,email:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:170}}/>:reg.email}
+                    </td>
+                    <td style={{padding:"9px 14px",whiteSpace:"nowrap",fontFamily:"monospace",fontSize:11,color:C.textFaint}}>{fmt(reg.registeredAt)}</td>
+                    <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                      <span style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:st.color,background:`${st.color}1A`,borderRadius:4,padding:"2px 8px"}}>{st.label}</span>
+                    </td>
+                    <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                      {isEd?(
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={saveEdit} disabled={saving} style={{fontSize:12,background:C.accent,color:C.bg,fontWeight:600,border:"none",borderRadius:6,padding:"4px 10px",cursor:saving?"default":"pointer",opacity:saving?.6:1}}>Save</button>
+                          <button onClick={()=>{setEditEmail(null);setEditErr("");}} style={{fontSize:12,background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
+                        </div>
+                      ):isDel?(
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <span style={{fontSize:12,color:C.error}}>Delete?</span>
+                          <button onClick={()=>delReg(reg.email)} disabled={saving} style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:6,padding:"4px 10px",cursor:saving?"default":"pointer"}}>Confirm</button>
+                          <button onClick={()=>setConfDel(null)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
+                        </div>
+                      ):(
+                        <div style={{display:"flex",gap:6}}>
+                          <button onClick={()=>{setEditEmail(reg.email);setDraft({...reg});setEditErr("");setConfDel(null);}} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><Pencil size={12}/></button>
+                          <button onClick={()=>{setConfDel(reg.email);setEditEmail(null);}} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><Trash2 size={12}/></button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {editErr&&<p style={{fontSize:12,color:C.error,padding:"8px 14px"}}>{editErr}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
+  const [nn,setNn]=useState(""); const [np,setNp]=useState(""); const [npc,setNpc]=useState("");
+  const [aErr,setAErr]=useState(""); const [aBusy,setABusy]=useState(false);
+  const [cp,setCp]=useState(""); const [chp,setChp]=useState(""); const [chpc,setChpc]=useState("");
+  const [cErr,setCErr]=useState(""); const [cOk,setCOk]=useState(""); const [cBusy,setCBusy]=useState(false);
+  const [confDel,setConfDel]=useState(null);
+
+  // EmailJS config
+  const [ejsSvcId,  setEjsSvcId]  = useState("");
+  const [ejsTplId,  setEjsTplId]  = useState("");
+  const [ejsPubKey, setEjsPubKey] = useState("");
+  const [ejsErr,    setEjsErr]    = useState("");
+  const [ejsOk,     setEjsOk]     = useState("");
+  const [ejsBusy,   setEjsBusy]   = useState(false);
+  const [ejsLoaded, setEjsLoaded] = useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      const r = await safeGet(EMAILJS_KEY);
+      if(r){ const cfg=JSON.parse(r.value); setEjsSvcId(cfg.serviceId||""); setEjsTplId(cfg.templateId||""); setEjsPubKey(cfg.publicKey||""); }
+      setEjsLoaded(true);
+    })();
+  },[]);
+
+  const saveEjs = async () => {
+    setEjsErr(""); setEjsOk("");
+    if(!ejsSvcId.trim()||!ejsTplId.trim()||!ejsPubKey.trim()){ setEjsErr("All three fields are required."); return; }
+    setEjsBusy(true);
+    const ok = await safeSave(EMAILJS_KEY,{ serviceId:ejsSvcId.trim(), templateId:ejsTplId.trim(), publicKey:ejsPubKey.trim() });
+    if(ok) setEjsOk("Email config saved.");
+    else setEjsErr("Failed to save. Try again.");
+    setEjsBusy(false);
+  };
+
+  const save=async(next)=>{const ok=await safeSave(ADMIN_KEY,next);if(ok)setAdmins(next);return ok;};
+
+  const addAdmin=async()=>{
+    setAErr("");
+    if(!nn.trim()){setAErr("Name is required.");return;}
+    if(np.length<6){setAErr("Passcode must be at least 6 characters.");return;}
+    if(np!==npc){setAErr("Passcodes don't match.");return;}
+    setABusy(true);
+    const h=await hashPC(np);
+    if(admins.some(a=>a.passcodeHash===h)){setAErr("That passcode is already in use.");setABusy(false);return;}
+    const ok=await save([...admins,{id:uid(),name:nn.trim(),passcodeHash:h}]);
+    if(ok){setNn("");setNp("");setNpc("");}
+    else setAErr("Failed to save.");
+    setABusy(false);
+  };
+
+  const delAdmin=async(id)=>{
+    if(admins.length<=1){setAErr("Can't remove the last admin.");setConfDel(null);return;}
+    const ok=await save(admins.filter(a=>a.id!==id));
+    if(ok){setConfDel(null);if(me?.id===id){setAuthed(false);setMe(null);}}
+  };
+
+  const changePass=async()=>{
+    setCErr("");setCOk("");
+    if(chp.length<6){setCErr("New passcode must be at least 6 chars.");return;}
+    if(chp!==chpc){setCErr("New passcodes don't match.");return;}
+    setCBusy(true);
+    const ch=await hashPC(cp),m=admins.find(a=>a.id===me?.id);
+    if(!m||m.passcodeHash!==ch){setCErr("Current passcode is incorrect.");setCBusy(false);return;}
+    const nh=await hashPC(chp);
+    const ok=await save(admins.map(a=>a.id===me.id?{...a,passcodeHash:nh}:a));
+    if(ok){setCp("");setChp("");setChpc("");setCOk("Passcode updated successfully.");}
+    else setCErr("Failed to save.");
+    setCBusy(false);
+  };
+
+  const sec={...glass,padding:20,display:"grid",gap:10};
+  const slbl={fontSize:13,fontWeight:600,color:C.textDim};
+
+  return(
+    <div style={{display:"grid",gap:16,maxWidth:500}}>
+      <div style={sec}>
+        <p style={slbl}>Admins ({admins.length})</p>
+        {admins.map(a=>(
+          <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:8}}>
+            <span style={{fontSize:14}}>{a.name}{me?.id===a.id&&<span style={{fontSize:11,color:C.accent,marginLeft:8}}>(you)</span>}</span>
+            {confDel===a.id?(
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:12,color:C.error}}>Remove?</span>
+                <button onClick={()=>delAdmin(a.id)} style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer"}}>Confirm</button>
+                <button onClick={()=>setConfDel(null)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
+              </div>
+            ):(
+              <button onClick={()=>setConfDel(a.id)} disabled={admins.length<=1} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"4px 7px",cursor:admins.length<=1?"default":"pointer",opacity:admins.length<=1?.3:1,display:"flex"}}><Trash2 size={13}/></button>
+            )}
+          </div>
+        ))}
+        {aErr&&<p style={{fontSize:12,color:C.error}}>{aErr}</p>}
+      </div>
+
+      <div style={sec}>
+        <p style={slbl}>Add new admin</p>
+        <input value={nn} onChange={e=>setNn(e.target.value)} placeholder="Name" style={iSty} onFocus={fi} onBlur={fo}/>
+        <input type="password" value={np} onChange={e=>setNp(e.target.value)} placeholder="Passcode (min 6 chars)" style={iSty} onFocus={fi} onBlur={fo}/>
+        <input type="password" value={npc} onChange={e=>setNpc(e.target.value)} placeholder="Confirm passcode" style={iSty} onFocus={fi} onBlur={fo}/>
+        <button onClick={addAdmin} disabled={aBusy} onMouseEnter={e=>{if(!aBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:aBusy?"default":"pointer",opacity:aBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          {aBusy?<><Loader2 size={13} className="animate-spin"/>Adding...</>:<><Plus size={13}/>Add admin</>}
+        </button>
+      </div>
+
+      <div style={sec}>
+        <p style={slbl}>Change my passcode</p>
+        <input type="password" value={cp} onChange={e=>setCp(e.target.value)} placeholder="Current passcode" style={iSty} onFocus={fi} onBlur={fo}/>
+        <input type="password" value={chp} onChange={e=>setChp(e.target.value)} placeholder="New passcode (min 6 chars)" style={iSty} onFocus={fi} onBlur={fo}/>
+        <input type="password" value={chpc} onChange={e=>setChpc(e.target.value)} placeholder="Confirm new passcode" style={iSty} onFocus={fi} onBlur={fo}/>
+        {cErr&&<p style={{fontSize:12,color:C.error}}>{cErr}</p>}
+        {cOk&&<p style={{fontSize:12,color:C.success}}>{cOk}</p>}
+        <button onClick={changePass} disabled={cBusy} onMouseEnter={e=>{if(!cBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:cBusy?"default":"pointer",opacity:cBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          {cBusy?<><Loader2 size={13} className="animate-spin"/>Updating...</>:"Update passcode"}
+        </button>
+      </div>
+
+      {/* EmailJS config */}
+      <div style={sec}>
+        <p style={slbl}>Email config (EmailJS)</p>
+        <p style={{fontSize:12,color:C.textFaint,lineHeight:1.6,marginBottom:4}}>
+          Required for OTP email delivery. <a href="https://www.emailjs.com" target="_blank" rel="noreferrer" style={{color:C.accent}}>Create a free EmailJS account</a>, add an email service, then create a template with variables: <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>{"{{to_name}}"}</span>, <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>{"{{to_email}}"}</span>, <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>{"{{otp_code}}"}</span>, <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>{"{{session_title}}"}</span>, <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>{"{{expiry_minutes}}"}</span>.
+        </p>
+        {!ejsLoaded ? <p style={{fontSize:12,color:C.textFaint}}>Loading...</p> : (
+          <>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SERVICE ID</label>
+              <input value={ejsSvcId} onChange={e=>{setEjsSvcId(e.target.value);setEjsErr("");setEjsOk("");}} placeholder="e.g. service_xxxxxxx" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+            </div>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>TEMPLATE ID</label>
+              <input value={ejsTplId} onChange={e=>{setEjsTplId(e.target.value);setEjsErr("");setEjsOk("");}} placeholder="e.g. template_xxxxxxx" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+            </div>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>PUBLIC KEY</label>
+              <input value={ejsPubKey} onChange={e=>{setEjsPubKey(e.target.value);setEjsErr("");setEjsOk("");}} placeholder="e.g. xxxxxxxxxxxxxxxxxxxxxx" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+            </div>
+            {ejsErr&&<p style={{fontSize:12,color:C.error}}>{ejsErr}</p>}
+            {ejsOk&&<p style={{fontSize:12,color:C.success}}>{ejsOk}</p>}
+            <button onClick={saveEjs} disabled={ejsBusy} onMouseEnter={e=>{if(!ejsBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:ejsBusy?"default":"pointer",opacity:ejsBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+              {ejsBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save email config"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
