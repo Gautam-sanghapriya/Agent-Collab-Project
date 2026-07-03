@@ -12,20 +12,25 @@ const regKey = (sid) => `ai-ready-reg-1782870003-${sid}`;
 const BOOTSTRAP_PASSCODE = "aiready2026";
 const EMAIL_CFG_KEY  = "ai-ready-emailcfg-1782870003";
 
+// Shri Tech Partners brand tokens
 const C = {
   bg:"#1b3a5c", bgPanel:"#0d1b2a", border:"rgba(0,174,239,0.10)",
-  text:"#FFFFFF", textDim:"rgba(255,255,255,0.40)", textFaint:"rgba(255,255,255,0.50)",
-  accent:"#00aeef", accentHover:"#2b6b8a",
+  text:"#FFFFFF", textDim:"rgba(255,255,255,0.70)", textFaint:"rgba(255,255,255,0.40)",
+  accent:"#00aeef", accentHover:"rgba(0,174,239,0.90)",
   error:"#F87171", success:"#34D399", warn:"#FBBF24",
 };
 const glass = {
   background:"rgba(13,27,42,0.6)", backdropFilter:"blur(16px)",
-  WebkitBackdropFilter:"blur(16px)", border:"1px solid rgba(0,174,239,0.10)",
-  borderRadius:16, boxShadow:"0 8px 32px rgba(0,0,0,0.25)",
+  WebkitBackdropFilter:"blur(16px)", border:"1px solid rgba(0,174,239,0.1)",
+  borderRadius:16,
 };
-const iSty = { width:"100%", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", fontSize:14, color:C.text, outline:"none", transition:"all 300ms cubic-bezier(0.4,0,0.2,1)" };
+const iSty = { width:"100%", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:12, padding:"12px 16px", fontSize:13, color:C.text, outline:"none", transition:"all 300ms cubic-bezier(0.4,0,0.2,1)" };
 const fi = (e)=>{ e.target.style.borderColor="rgba(0,174,239,0.40)"; e.target.style.background="rgba(0,174,239,0.03)"; e.target.style.boxShadow="0 0 20px rgba(0,174,239,0.08)"; };
 const fo = (e)=>{ e.target.style.borderColor="rgba(255,255,255,0.06)"; e.target.style.background="rgba(255,255,255,0.03)"; e.target.style.boxShadow="none"; };
+const ctaHover = (e)=>{ e.currentTarget.style.background=C.accentHover; e.currentTarget.style.boxShadow="0 0 20px rgba(0,174,239,0.30)"; };
+const ctaLeave = (e)=>{ e.currentTarget.style.background=C.accent; e.currentTarget.style.boxShadow=""; };
+const secHover = (e)=>{ e.currentTarget.style.color="#fff"; e.currentTarget.style.borderColor="rgba(0,174,239,0.40)"; e.currentTarget.style.background="rgba(0,174,239,0.05)"; e.currentTarget.style.boxShadow="0 0 20px rgba(0,174,239,0.10)"; };
+const secLeave = (e)=>{ e.currentTarget.style.color=C.textFaint; e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background="transparent"; e.currentTarget.style.boxShadow="none"; };
 
 async function safeGet(key){
   try{
@@ -70,17 +75,17 @@ export default function App(){
   const [view,setView]=useState("register");
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
-      <style>{`.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(0,174,239,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(0,174,239,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(0,174,239,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}`}</style>
-      <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:"rgba(0,174,239,0.06)",filter:"blur(100px)",pointerEvents:"none"}}/>
-      <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:"rgba(43,107,138,0.05)",filter:"blur(120px)",pointerEvents:"none"}}/>
+      <style>{`.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
+      <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:C.accentHover,opacity:.14,filter:"blur(100px)",pointerEvents:"none"}}/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
-        <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(13,27,42,0.6)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",position:"sticky",top:0,zIndex:10}}>
+        <div style={{borderBottom:`1px solid ${C.border}`,background:"rgba(11,37,71,.8)",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:10}}>
           <div style={{maxWidth:980,margin:"0 auto",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:8,height:8,borderRadius:"50%",background:C.accent,boxShadow:"0 0 12px rgba(0,174,239,0.6)"}}/>
-              <span style={{fontSize:16,fontWeight:700,letterSpacing:"0.06em",color:C.text}}>AI Ready</span>
+              <div style={{width:8,height:8,borderRadius:"50%",background:C.accent}}/>
+              <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.15em",color:C.textFaint,textTransform:"uppercase"}}>AI Ready</span>
             </div>
-            <button onClick={()=>setView(v=>v==="register"?"admin":"register")} style={{fontSize:14,fontWeight:500,color:"rgba(255,255,255,0.50)",background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"color 300ms cubic-bezier(0.4,0,0.2,1)"}} onMouseEnter={e=>e.currentTarget.style.color="rgba(255,255,255,0.90)"} onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.50)"}>
+            <button onClick={()=>setView(v=>v==="register"?"admin":"register")} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               {view==="register"?<><ShieldCheck size={14}/>Admin</>:<>← Registration</>}
             </button>
           </div>
@@ -88,7 +93,7 @@ export default function App(){
         <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 16px 32px"}}>
           {view==="register"?<RegisterView/>:<AdminView/>}
         </div>
-        <div style={{textAlign:"center",paddingBottom:20,fontSize:11,color:"rgba(255,255,255,0.35)"}}>
+        <div style={{textAlign:"center",paddingBottom:20,fontSize:10,fontFamily:"monospace",color:C.textFaint}}>
           Registrations are stored securely and never shared with third parties.
         </div>
       </div>
@@ -336,8 +341,8 @@ function RegisterView(){
   };
 
   const fmtTime = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
-  const inpStyle = (err) => ({...iSty, border:`1px solid ${err?"rgba(241,113,113,0.8)":"rgba(255,255,255,0.16)"}`, fontSize:14, padding:"10px 14px", borderRadius:8, marginBottom: err?2:12});
-  const lbl = (t) => <label style={{display:"block",fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:6}}>{t} <span style={{color:C.accent}}>*</span></label>;
+  const inpStyle = (err) => ({...iSty, border:`1px solid ${err?C.error+"CC":"rgba(255,255,255,0.06)"}`, fontSize:14, padding:"12px 16px", borderRadius:12, marginBottom: err?2:12});
+  const lbl = (t) => <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>{t} <span style={{color:C.accent}}>*</span></label>;
 
   if(loading) return(
     <div style={{display:"flex",alignItems:"center",gap:8,color:C.textFaint,marginTop:60}}>
@@ -357,16 +362,16 @@ function RegisterView(){
   if(!sess) return(
     <div style={{width:"100%",maxWidth:480,marginTop:20}}>
       <div style={{padding:"28px 32px 24px",...glass,marginBottom:16}}>
-        <p style={{fontSize:12,fontWeight:600,letterSpacing:"0.3em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>AI Ready · Registration</p>
+        <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>AI Ready · Registration</p>
         <h1 style={{fontSize:22,fontWeight:700,marginBottom:6}}>Select your session</h1>
         <p style={{fontSize:13,color:C.textDim}}>Choose the session you'd like to register for.</p>
       </div>
       <div style={{display:"grid",gap:10}}>
         {sessions.map(s=>(
           <button key={s.id} onClick={()=>setSess(s)}
-            style={{background:"rgba(20,55,97,0.45)",backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:"16px 20px",cursor:"pointer",textAlign:"left",width:"100%",transition:"border-color .2s",minHeight:84,boxSizing:"border-box"}}
+            style={{...glass,borderRadius:12,padding:"16px 20px",cursor:"pointer",textAlign:"left",width:"100%",transition:"border-color .2s",minHeight:84,boxSizing:"border-box"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
-            onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.12)"}>
+            onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(0,174,239,0.1)"}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1,minWidth:0}}>
                 <p style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,margin:"0 0 5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</p>
@@ -394,8 +399,8 @@ function RegisterView(){
       {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:16}}>{sess.date}</p>}
       <p style={{fontSize:13,color:C.textDim}}>Your email <span style={{color:C.text}}>{email}</span> has been verified and your spot is confirmed.</p>
       <div style={{display:"flex",gap:10,justifyContent:"center",marginTop:20,flexWrap:"wrap"}}>
-        <button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");}} style={{fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
-        {sessions.length>1&&<button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontSize:12,color:"rgba(255,255,255,0.50)",background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
+        <button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");}} style={{fontFamily:"monospace",fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
+        {sessions.length>1&&<button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
       </div>
     </div>
   );
@@ -404,11 +409,11 @@ function RegisterView(){
   if(step === "otp") return(
     <div style={{width:"100%",maxWidth:420,padding:36,...glass,marginTop:20}}>
       {sessions.length>1&&(
-        <button onClick={()=>setStep("form")} style={{fontSize:12,color:"rgba(255,255,255,0.50)",background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>← Back</button>
+        <button onClick={()=>setStep("form")} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>← Back</button>
       )}
-      <p style={{fontSize:12,fontWeight:600,letterSpacing:"0.3em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Email Verification</p>
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Email Verification</p>
       <h1 style={{fontSize:20,fontWeight:700,lineHeight:1.3,marginBottom:12}}>Enter your OTP</h1>
-      <div style={{background:"rgba(29,166,240,0.08)",border:"1px solid rgba(29,166,240,0.25)",borderRadius:10,padding:"12px 14px",marginBottom:20}}>
+      <div style={{background:"rgba(0,174,239,0.08)",border:"1px solid rgba(0,174,239,0.25)",borderRadius:12,padding:"12px 14px",marginBottom:20}}>
         <p style={{fontSize:13,color:C.textDim,lineHeight:1.5,margin:0}}>
           A 4-digit code was sent to <span style={{color:C.text,fontWeight:600}}>{email}</span>. Enter it below to confirm your registration.
         </p>
@@ -426,23 +431,24 @@ function RegisterView(){
       </div>
 
       {/* OTP input */}
-      <label style={{display:"block",fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:6}}>4-DIGIT CODE</label>
+      <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>4-DIGIT CODE</label>
       <div onKeyDown={e=>{if(e.key==="Enter"&&!sending&&attempts<3&&timeLeft>0) verifyOtp();}}>
         <input
           type="text" inputMode="numeric" maxLength={4}
           value={otpInput} onChange={e=>{ setOtpInput(e.target.value.replace(/\D/g,"")); setOtpErr(""); }}
           placeholder="••••"
-          style={{...iSty, fontSize:28, padding:"12px 14px", borderRadius:8, letterSpacing:"0.4em", textAlign:"center", marginBottom: otpErr?4:12,
-            border:`1px solid ${otpErr?"rgba(241,113,113,0.8)":"rgba(255,255,255,0.16)"}`}}
+          style={{...iSty, fontSize:28, padding:"12px 14px", borderRadius:12, letterSpacing:"0.4em", textAlign:"center", marginBottom: otpErr?4:12,
+            border:`1px solid ${otpErr?C.error+"CC":"rgba(255,255,255,0.06)"}`}}
           onFocus={fi} onBlur={fo}
           autoFocus
         />
         {otpErr&&<p style={{fontSize:12,color:C.error,marginBottom:12}}>{otpErr}</p>}
         {sendErr&&<p style={{fontSize:12,color:C.error,marginBottom:12}}>{sendErr}</p>}
         <button onClick={verifyOtp} disabled={otpInput.length!==4||sending||attempts>=3||timeLeft<=0}
-          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:otpInput.length!==4||sending||attempts>=3||timeLeft<=0?"default":"pointer",opacity:otpInput.length!==4||attempts>=3||timeLeft<=0?.5:1,animation:(otpInput.length!==4||sending||attempts>=3||timeLeft<=0)?"none":"neon-pulse 3s ease-in-out infinite"}}
-          onMouseEnter={e=>{if(otpInput.length===4&&!sending&&attempts<3&&timeLeft>0)e.currentTarget.style.background=C.accentHover;}}
-          onMouseLeave={e=>{e.currentTarget.style.background=C.accent;}}>
+          className={otpInput.length!==4||sending||attempts>=3||timeLeft<=0?"":"neon-glow"}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:otpInput.length!==4||sending||attempts>=3||timeLeft<=0?"default":"pointer",opacity:otpInput.length!==4||attempts>=3||timeLeft<=0?.5:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(otpInput.length===4&&!sending&&attempts<3&&timeLeft>0)ctaHover(e);}}
+          onMouseLeave={ctaLeave}>
           {sending?<><Loader2 size={14} className="animate-spin"/>Verifying...</>:"Verify & Register"}
         </button>
       </div>
@@ -453,11 +459,11 @@ function RegisterView(){
   return(
     <div style={{width:"100%",maxWidth:440,padding:36,...glass,marginTop:20}}>
       {sessions.length>1&&(
-        <button onClick={()=>setSess(null)} style={{fontSize:12,color:"rgba(255,255,255,0.50)",background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>
+        <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>
           ← All sessions
         </button>
       )}
-      <p style={{fontSize:12,fontWeight:600,letterSpacing:"0.3em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Registration · {sess.id}</p>
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Registration · {sess.id}</p>
       <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,marginBottom:4}}>{sess.title}</h1>
       {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:4}}>{sess.date}</p>}
       {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.5,marginBottom:20}}>{sess.description}</p>}
@@ -468,11 +474,12 @@ function RegisterView(){
         {lbl("EMAIL ADDRESS")}
         <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailErr("");}} placeholder="ada@company.com" style={inpStyle(emailErr)} onFocus={fi} onBlur={fo}/>
         {emailErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{emailErr}</p>}
-        {sendErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:"rgba(241,113,113,0.1)",border:"1px solid rgba(241,113,113,0.3)",borderRadius:8,padding:"9px 12px",marginBottom:12}}><AlertCircle size={14} style={{flexShrink:0,marginTop:2}}/>{sendErr}</div>}
+        {sendErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:12,padding:"9px 12px",marginBottom:12}}><AlertCircle size={14} style={{flexShrink:0,marginTop:2}}/>{sendErr}</div>}
         <button onClick={handleRegister} disabled={sending}
-          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:sending?"default":"pointer",opacity:sending?.6:1,marginTop:4,animation:sending?"none":"neon-pulse 3s ease-in-out infinite"}}
-          onMouseEnter={e=>{if(!sending)e.currentTarget.style.background=C.accentHover;}}
-          onMouseLeave={e=>{e.currentTarget.style.background=C.accent;}}>
+          className={sending?"":"neon-glow"}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:sending?"default":"pointer",opacity:sending?.6:1,marginTop:4,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(!sending)ctaHover(e);}}
+          onMouseLeave={ctaLeave}>
           {sending
             ? <><Loader2 size={14} className="animate-spin"/>{otpRequired?"Sending OTP...":"Registering..."}</>
             : (otpRequired ? "Send OTP" : "Register")}
@@ -535,15 +542,17 @@ function AdminView(){
 
   if(!authed) return(
     <div style={{width:"100%",maxWidth:380,padding:32,...glass,marginTop:20}}>
-      <p style={{fontSize:12,fontWeight:600,letterSpacing:"0.3em",color:C.accent,textTransform:"uppercase",marginBottom:10}}>Admin</p>
+      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:10}}>Admin</p>
       <h1 style={{fontSize:20,fontWeight:600,marginBottom:20}}>Sign in</h1>
       <div onKeyDown={e=>{if(e.key==="Enter")handleAuth();}}>
-        <label style={{display:"block",fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:6}}>ADMIN NAME</label>
-        <input type="text" value={aName} onChange={e=>setAName(e.target.value)} placeholder="e.g. Owner" autoFocus style={{...iSty,marginBottom:12,fontSize:14,padding:"10px 14px",borderRadius:8}} onFocus={fi} onBlur={fo}/>
-        <label style={{display:"block",fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase",marginBottom:6}}>PASSCODE</label>
-        <input type="password" value={pc} onChange={e=>setPc(e.target.value)} placeholder="••••••••" style={{...iSty,marginBottom:12,fontSize:14,padding:"10px 14px",borderRadius:8}} onFocus={fi} onBlur={fo}/>
+        <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>ADMIN NAME</label>
+        <input type="text" value={aName} onChange={e=>setAName(e.target.value)} placeholder="e.g. Owner" autoFocus style={{...iSty,marginBottom:12,fontSize:14}} onFocus={fi} onBlur={fo}/>
+        <label style={{display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>PASSCODE</label>
+        <input type="password" value={pc} onChange={e=>setPc(e.target.value)} placeholder="••••••••" style={{...iSty,marginBottom:12,fontSize:14}} onFocus={fi} onBlur={fo}/>
         {authErr&&<p style={{fontSize:11,color:C.error,marginBottom:12}}>{authErr}</p>}
-        <button type="button" onClick={handleAuth} disabled={authBusy} style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"10px",cursor:authBusy?"default":"pointer",opacity:authBusy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,animation:authBusy?"none":"neon-pulse 3s ease-in-out infinite"}}>
+        <button type="button" onClick={handleAuth} disabled={authBusy}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"10px",cursor:authBusy?"default":"pointer",opacity:authBusy?.6:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
+          onMouseEnter={e=>{if(!authBusy)ctaHover(e);}} onMouseLeave={ctaLeave}>
           {authBusy?<><Loader2 size={14} className="animate-spin"/>Checking...</>:"Sign in"}
         </button>
       </div>
@@ -555,12 +564,12 @@ function AdminView(){
     <div style={{width:"100%",maxWidth:980,marginTop:20}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
         <div>
-          <p style={{fontSize:12,fontWeight:600,letterSpacing:"0.3em",color:C.accent,textTransform:"uppercase",marginBottom:4}}>Admin · {me?.name}</p>
+          <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:4}}>Admin · {me?.name}</p>
           <h1 style={{fontSize:20,fontWeight:700}}>Dashboard</h1>
         </div>
         <div style={{display:"flex",gap:8}}>
           {TABS.map(([t,l])=>(
-            <button key={t} onClick={()=>setTab(t)} style={{fontSize:14,fontWeight:500,textTransform:"uppercase",letterSpacing:"0.025em",border:`1px solid ${tab===t?"rgba(0,174,239,0.20)":"transparent"}`,color:tab===t?C.accent:"rgba(255,255,255,0.50)",background:tab===t?"rgba(0,174,239,0.08)":"transparent",borderRadius:9999,padding:"8px 16px",cursor:"pointer",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}} onMouseEnter={e=>{if(tab!==t)e.currentTarget.style.color="rgba(255,255,255,0.90)";}} onMouseLeave={e=>{if(tab!==t)e.currentTarget.style.color="rgba(255,255,255,0.50)";}}>{l}</button>
+            <button key={t} onClick={()=>setTab(t)} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${tab===t?C.accent:C.border}`,color:tab===t?C.accent:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>{l}</button>
           ))}
         </div>
       </div>
@@ -574,7 +583,7 @@ function AdminView(){
 function StatCard({label,value,small}){
   return(
     <div style={{...glass,padding:"16px 20px"}}>
-      <p style={{fontSize:11,fontWeight:500,color:"rgba(255,255,255,0.40)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>{label}</p>
+      <p style={{fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:6}}>{label}</p>
       <p style={{fontSize:small?14:24,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value}</p>
     </div>
   );
@@ -641,32 +650,32 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
       <div style={{...glass,padding:20}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
           <h2 style={{fontSize:15,fontWeight:600}}>All sessions</h2>
-          <button onClick={()=>{setShowForm(f=>!f);cancelEdit();}} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:12,border:"none",borderRadius:9999,padding:"8px 18px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <button onClick={()=>{setShowForm(f=>!f);cancelEdit();}} onMouseEnter={ctaHover} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:12,border:"none",borderRadius:12,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
             <Plus size={14}/>New session
           </button>
         </div>
 
         {showForm&&(
-          <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:10,padding:16,marginBottom:14,display:"grid",gap:10}}>
+          <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:14,display:"grid",gap:10}}>
             <h3 style={{fontSize:13,fontWeight:600,color:C.textDim}}>Create new session</h3>
             <div>
-              <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>SESSION TITLE *</label>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION TITLE *</label>
               <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. AI Basics for Teams" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
             </div>
             <div>
-              <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>DATE / TIME</label>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
               <input value={date} onChange={e=>setDate(e.target.value)} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
             </div>
             <div>
-              <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>DESCRIPTION</label>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
               <textarea value={desc} onChange={e=>setDesc(e.target.value)} rows={2} placeholder="Short description shown on the registration form..." style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
             </div>
             {fErr&&<p style={{fontSize:12,color:C.error}}>{fErr}</p>}
             <div style={{display:"flex",gap:8}}>
-              <button onClick={create} disabled={busy} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:9999,padding:"9px 20px",cursor:busy?"default":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={create} disabled={busy} onMouseEnter={e=>{if(!busy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:busy?"default":"pointer",opacity:busy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {busy?<><Loader2 size={13} className="animate-spin"/>Creating...</>:"Create session"}
               </button>
-              <button onClick={()=>{setShowForm(false);setFErr("");}} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 12px",cursor:"pointer",fontSize:13}}>Cancel</button>
+              <button onClick={()=>{setShowForm(false);setFErr("");}} onMouseEnter={secHover} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Cancel</button>
             </div>
           </div>
         )}
@@ -680,7 +689,7 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
               const isDel=confDel===s.id;
               const isEdit=editSid===s.id;
               return(
-                <div key={s.id} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${isEdit?C.accent+"99":s.active?C.accent+"44":C.border}`,borderRadius:10,padding:"14px 16px",display:"grid",gap:10}}>
+                <div key={s.id} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${isEdit?C.accent+"99":s.active?C.accent+"44":C.border}`,borderRadius:12,padding:"14px 16px",display:"grid",gap:10}}>
                   {isEdit?(
                     /* ── Edit mode ── */
                     <div style={{display:"grid",gap:10}}>
@@ -688,23 +697,23 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
                         <span style={{fontSize:10,fontFamily:"monospace",color:C.accent}}>Editing · {s.id}</span>
                       </div>
                       <div>
-                        <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>SESSION TITLE *</label>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION TITLE *</label>
                         <input value={editDraft.title} onChange={e=>setEditDraft(d=>({...d,title:e.target.value}))} style={{...iSty,marginTop:5,fontSize:14}} onFocus={fi} onBlur={fo}/>
                       </div>
                       <div>
-                        <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>DATE / TIME</label>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
                         <input value={editDraft.date} onChange={e=>setEditDraft(d=>({...d,date:e.target.value}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
                       </div>
                       <div>
-                        <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>DESCRIPTION</label>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
                         <textarea value={editDraft.description} onChange={e=>setEditDraft(d=>({...d,description:e.target.value}))} rows={2} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
                       </div>
                       {editErr&&<p style={{fontSize:12,color:C.error}}>{editErr}</p>}
                       <div style={{display:"flex",gap:8}}>
-                        <button onClick={saveEdit} disabled={editBusy} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:9999,padding:"8px 20px",cursor:editBusy?"default":"pointer",opacity:editBusy?.6:1,display:"flex",alignItems:"center",gap:6}}>
+                        <button onClick={saveEdit} disabled={editBusy} onMouseEnter={e=>{if(!editBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"7px 14px",cursor:editBusy?"default":"pointer",opacity:editBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                           {editBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save changes"}
                         </button>
-                        <button onClick={cancelEdit} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:9999,padding:"8px 18px",cursor:"pointer",fontSize:13}}>Cancel</button>
+                        <button onClick={cancelEdit} onMouseEnter={secHover} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:12,padding:"7px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Cancel</button>
                       </div>
                     </div>
                   ):(
@@ -830,17 +839,17 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
   return(
     <div style={{...glass,padding:24}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
-        <select value={selSid||""} onChange={e=>setSelSid(e.target.value)} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${C.border}`,borderRadius:9999,padding:"8px 18px",fontSize:13,color:C.text,outline:"none",cursor:"pointer",flex:1,minWidth:200}}>
+        <select value={selSid||""} onChange={e=>setSelSid(e.target.value)} style={{background:"rgba(255,255,255,0.07)",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:C.text,outline:"none",cursor:"pointer",flex:1,minWidth:200}}>
           {sessions.map(s=><option key={s.id} value={s.id} style={{background:C.bgPanel}}>{s.active?"● ":""}{s.title} [{s.id}]</option>)}
         </select>
-        <button onClick={reload} style={{fontSize:12,border:`1px solid ${C.border}`,color:C.textFaint,background:"transparent",borderRadius:9999,padding:"8px 18px",cursor:"pointer"}}>Refresh</button>
-        <button onClick={exportCsv} disabled={display.length===0} style={{fontSize:12,background:C.accent,color:C.bg,fontWeight:600,border:"none",borderRadius:9999,padding:"8px 18px",display:"flex",alignItems:"center",gap:6,cursor:display.length===0?"default":"pointer",opacity:display.length===0?.4:1}}>
+        <button onClick={reload} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.border}`,color:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>Refresh</button>
+        <button onClick={exportCsv} disabled={display.length===0} onMouseEnter={e=>{if(display.length>0)ctaHover(e);}} onMouseLeave={ctaLeave} style={{fontFamily:"monospace",fontSize:12,background:C.accent,color:C.bg,fontWeight:600,border:"none",borderRadius:12,padding:"7px 12px",display:"flex",alignItems:"center",gap:6,cursor:display.length===0?"default":"pointer",opacity:display.length===0?.4:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
           <Download size={13}/>Export
         </button>
       </div>
 
       {sess&&(
-        <div style={{background:"rgba(255,255,255,0.04)",borderRadius:9999,padding:"9px 20px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
           <div>
             <span style={{fontSize:13,fontWeight:600,color:C.textDim}}>{sess.title}</span>
             {sess.date&&<span style={{fontSize:11,color:C.textFaint,marginLeft:8}}>{sess.date}</span>}
@@ -868,16 +877,16 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
       ):display.length===0?(
         <div style={{textAlign:"center",padding:"32px 0",color:C.textFaint,fontSize:14}}>No results match "{query}".</div>
       ):(
-        <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
+        <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
           <table style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:580}}>
             <thead>
               <tr style={{background:"rgba(255,255,255,0.06)"}}>
                 {[["name","Name"],["email","Email"],["registeredAt","Registered"],["status","Status"]].map(([k,l])=>(
-                  <th key={k} onClick={()=>k!=="status"&&tSort(k)} style={{padding:"9px 14px",fontSize:10,fontWeight:500,color:"rgba(255,255,255,0.40)",textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap",textAlign:"left",cursor:k!=="status"?"pointer":"default",userSelect:"none"}}>
+                  <th key={k} onClick={()=>k!=="status"&&tSort(k)} style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap",textAlign:"left",cursor:k!=="status"?"pointer":"default",userSelect:"none"}}>
                     <span style={{display:"inline-flex",alignItems:"center",gap:4}}>{l}{k!=="status"&&sIcon(k)}</span>
                   </th>
                 ))}
-                <th style={{padding:"9px 14px",fontSize:10,fontWeight:500,color:"rgba(255,255,255,0.40)",textTransform:"uppercase"}}>Actions</th>
+                <th style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase"}}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -886,7 +895,7 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
                 const isEd=editEmail===reg.email;
                 const isDel=confDel===reg.email;
                 return(
-                  <tr key={reg.email} style={{borderTop:`1px solid ${C.border}`,background:isEd?"rgba(29,166,240,0.07)":"transparent"}}>
+                  <tr key={reg.email} style={{borderTop:`1px solid ${C.border}`,background:isEd?"rgba(0,174,239,0.07)":"transparent"}}>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
                       {isEd?<input value={draft.name||""} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:130}}/>:reg.name}
                     </td>
@@ -895,7 +904,7 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
                     </td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap",fontFamily:"monospace",fontSize:11,color:C.textFaint}}>{fmt(reg.registeredAt)}</td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
-                      <span style={{fontSize:11,fontWeight:600,color:st.color,background:`${st.color}1A`,borderRadius:4,padding:"2px 8px"}}>{st.label}</span>
+                      <span style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:st.color,background:`${st.color}1A`,borderRadius:4,padding:"2px 8px"}}>{st.label}</span>
                     </td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
                       {isEd?(
@@ -980,6 +989,8 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     setAsTesting(false);
   };
 
+  const save=async(next)=>{const ok=await safeSave(ADMIN_KEY,next);if(ok)setAdmins(next);return ok;};
+
   const addAdmin=async()=>{
     setAErr("");
     if(!nn.trim()){setAErr("Name is required.");return;}
@@ -1014,11 +1025,11 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     setCBusy(false);
   };
 
-  const sec={...glass,padding:20,display:"grid",gap:10,width:"100%",boxSizing:"border-box"};
+  const sec={...glass,padding:20,display:"grid",gap:10};
   const slbl={fontSize:13,fontWeight:600,color:C.textDim};
 
   return(
-    <div style={{display:"grid",gap:16,width:"100%",justifyItems:"stretch"}}>
+    <div style={{display:"grid",gap:16,width:"100%",maxWidth:1000, margin:"0 auto"}}>
       <div style={sec}>
         <p style={slbl}>Admins ({admins.length})</p>
         {admins.map(a=>(
@@ -1043,7 +1054,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
         <input value={nn} onChange={e=>setNn(e.target.value)} placeholder="Name" style={iSty} onFocus={fi} onBlur={fo}/>
         <input type="password" value={np} onChange={e=>setNp(e.target.value)} placeholder="Passcode (min 6 chars)" style={iSty} onFocus={fi} onBlur={fo}/>
         <input type="password" value={npc} onChange={e=>setNpc(e.target.value)} placeholder="Confirm passcode" style={iSty} onFocus={fi} onBlur={fo}/>
-        <button onClick={addAdmin} disabled={aBusy} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:9999,padding:"9px 20px",cursor:aBusy?"default":"pointer",opacity:aBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content"}}>
+        <button onClick={addAdmin} disabled={aBusy} onMouseEnter={e=>{if(!aBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:aBusy?"default":"pointer",opacity:aBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
           {aBusy?<><Loader2 size={13} className="animate-spin"/>Adding...</>:<><Plus size={13}/>Add admin</>}
         </button>
       </div>
@@ -1055,7 +1066,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
         <input type="password" value={chpc} onChange={e=>setChpc(e.target.value)} placeholder="Confirm new passcode" style={iSty} onFocus={fi} onBlur={fo}/>
         {cErr&&<p style={{fontSize:12,color:C.error}}>{cErr}</p>}
         {cOk&&<p style={{fontSize:12,color:C.success}}>{cOk}</p>}
-        <button onClick={changePass} disabled={cBusy} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:9999,padding:"9px 20px",cursor:cBusy?"default":"pointer",opacity:cBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content"}}>
+        <button onClick={changePass} disabled={cBusy} onMouseEnter={e=>{if(!cBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:cBusy?"default":"pointer",opacity:cBusy?.6:1,display:"flex",alignItems:"center",gap:6,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
           {cBusy?<><Loader2 size={13} className="animate-spin"/>Updating...</>:"Update passcode"}
         </button>
       </div>
@@ -1090,7 +1101,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
             </div>
 
             <div>
-              <label style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.40)",letterSpacing:"0.05em",textTransform:"uppercase"}}>APPS SCRIPT WEB APP URL {otpOn && <span style={{color:C.accent}}>*</span>}</label>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>APPS SCRIPT WEB APP URL {otpOn && <span style={{color:C.accent}}>*</span>}</label>
               <input
                 value={asUrl}
                 onChange={e=>{setAsUrl(e.target.value);setAsErr("");setAsOk("");setAsTestMsg("");}}
@@ -1101,12 +1112,12 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
             </div>
             {asErr&&<p style={{fontSize:12,color:C.error}}>{asErr}</p>}
             {asOk&&<p style={{fontSize:12,color:C.success}}>{asOk}</p>}
-            {asTestMsg&&<p style={{fontSize:12,color:C.textDim,lineHeight:1.5,background:"rgba(29,166,240,0.08)",border:"1px solid rgba(29,166,240,0.2)",borderRadius:8,padding:"8px 12px"}}>{asTestMsg}</p>}
+            {asTestMsg&&<p style={{fontSize:12,color:C.textDim,lineHeight:1.5,background:"rgba(0,174,239,0.08)",border:"1px solid rgba(0,174,239,0.2)",borderRadius:8,padding:"8px 12px"}}>{asTestMsg}</p>}
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={saveAs} disabled={asBusy} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:9999,padding:"9px 20px",cursor:asBusy?"default":"pointer",opacity:asBusy?.6:1,display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={saveAs} disabled={asBusy} onMouseEnter={e=>{if(!asBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:asBusy?"default":"pointer",opacity:asBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {asBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save settings"}
               </button>
-              <button onClick={testEmail} disabled={asTesting||!asUrl.trim()} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:9999,padding:"9px 20px",cursor:asTesting||!asUrl.trim()?"default":"pointer",opacity:asTesting||!asUrl.trim()?.5:1,display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={testEmail} disabled={asTesting||!asUrl.trim()} onMouseEnter={e=>{if(!asTesting&&asUrl.trim())secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:asTesting||!asUrl.trim()?"default":"pointer",opacity:asTesting||!asUrl.trim()?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {asTesting?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test request"}
               </button>
             </div>
