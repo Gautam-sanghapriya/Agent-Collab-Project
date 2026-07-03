@@ -4,7 +4,7 @@ import {
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
   ArrowUpDown, Plus, Calendar
 } from "lucide-react";
-import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { isSupabaseConfigured, supabase } from "./utils/supabase";
 
 const SESSIONS_KEY  = "ai-ready-sessions-1782870003";
 const ADMIN_KEY     = "ai-ready-admins-1782870003";

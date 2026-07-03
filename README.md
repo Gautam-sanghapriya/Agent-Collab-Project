@@ -31,3 +31,5 @@ VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
 For Vercel, Netlify, or Cloudflare Pages, add the same two environment variables in the hosting dashboard.
+
+The browser Supabase client lives at `src/utils/supabase.js`. This is a Vite React app, so no Next.js server helpers or middleware are required.
