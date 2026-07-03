@@ -4,6 +4,7 @@ import {
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
   ArrowUpDown, Plus, Calendar
 } from "lucide-react";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const SESSIONS_KEY  = "ai-ready-sessions-1782870003";
 const ADMIN_KEY     = "ai-ready-admins-1782870003";
@@ -34,6 +35,16 @@ const secLeave = (e)=>{ e.currentTarget.style.color=C.textFaint; e.currentTarget
 
 async function safeGet(key){
   try{
+    if(isSupabaseConfigured && supabase){
+      const { data, error } = await supabase
+        .from("app_storage")
+        .select("value")
+        .eq("key", key)
+        .maybeSingle();
+      if(error) throw error;
+      if(data) return { value: JSON.stringify(data.value) };
+      return null;
+    }
     if(window.storage?.get) return await window.storage.get(key,true);
     const value = window.localStorage.getItem(key);
     return value === null ? null : { value };
@@ -41,6 +52,13 @@ async function safeGet(key){
 }
 async function safeSave(key,val){
   try{
+    if(isSupabaseConfigured && supabase){
+      const { error } = await supabase
+        .from("app_storage")
+        .upsert({ key, value: val, updated_at: new Date().toISOString() });
+      if(error) throw error;
+      return true;
+    }
     const value = JSON.stringify(val);
     if(window.storage?.set){
       const r=await window.storage.set(key,value,true);
