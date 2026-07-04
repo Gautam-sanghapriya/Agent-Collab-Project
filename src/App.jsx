@@ -16,6 +16,25 @@ const ADMIN_SESSION_KEY = "ai-ready-adminsession-1782870003";
 const ACTIVITY_KEY = "ai-ready-activity-1782870003";
 const ACTIVITY_MAX = 500; // keep the most recent N entries
 
+// Feature permissions the superuser can grant to other admins.
+const PERMISSIONS = [
+  ["sessions",      "Manage sessions",        "Create, edit, activate/deactivate and delete sessions"],
+  ["registrations", "Manage registrations",   "View, edit, delete and export registrants"],
+  ["activity",      "View activity log",       "See the admin audit trail"],
+  ["settings",      "Email / OTP settings",    "Configure the Apps Script URL and OTP verification"],
+];
+const DEFAULT_PERMS = { sessions:true, registrations:true, activity:true, settings:false };
+
+// The bootstrap owner is the superuser. Legacy data may predate the `super`
+// flag, so if nobody is flagged, the first admin in the list is treated as super.
+function isSuperAdmin(admin, admins){
+  if(!admin) return false;
+  if(admin.super) return true;
+  if(Array.isArray(admins) && admins.length>0 && !admins.some(a=>a.super) && admins[0].id===admin.id) return true;
+  return false;
+}
+function permsOf(admin){ return (admin && admin.perms) || {}; }
+
 // Remember the signed-in admin for the browser session (survives reloads,
 // clears when the tab is closed). Stores identity only — never the passcode.
 function loadAdminSession(){
@@ -568,15 +587,37 @@ function AdminView(){
   const loadAdmins=useCallback(async()=>{const r=await safeGet(ADMIN_KEY);const l=r?JSON.parse(r.value):[];setAdmins(l);return l;},[]);
   useEffect(()=>{if(authed){loadAll();loadAdmins();}},[authed]);
 
+  // Effective permissions — read from the live admins list so changes apply
+  // without needing a re-login; fall back to the persisted session before load.
+  const meAdmin = admins.find(a=>a.id===me?.id);
+  const isSuper = meAdmin ? isSuperAdmin(meAdmin, admins) : !!me?.super;
+  const perms   = meAdmin ? permsOf(meAdmin) : (me?.perms || {});
+  const can = (k)=> isSuper || !!perms[k];
+
+  const visibleTabs=[];
+  if(can("sessions"))      visibleTabs.push(["sessions","Sessions"]);
+  if(can("registrations")) visibleTabs.push(["registrations","Registrations"]);
+  if(can("activity"))      visibleTabs.push(["activity","Activity"]);
+  if(isSuper)              visibleTabs.push(["permissions","Permissions"]);
+  visibleTabs.push(["settings","Settings"]); // always available (self-service passcode)
+
+  // Keep the selected tab within what this admin may access. Declared here (a
+  // hook) BEFORE any early return so hook order stays stable across renders.
+  useEffect(()=>{
+    if(!authed) return;
+    const ids = visibleTabs.map(t=>t[0]);
+    if(!ids.includes(tab)) setTab(ids[0]||"settings");
+  },[authed, tab, isSuper, JSON.stringify(perms)]);
+
   const handleAuth=async()=>{
     setAuthBusy(true);setAuthErr("");
     const hash=await hashPC(pc);
     let list=await loadAdmins();
     if(list.length===0){
       if(pc===BOOTSTRAP_PASSCODE){
-        const owner={id:uid(),name:aName.trim()||"Owner",passcodeHash:hash};
+        const owner={id:uid(),name:aName.trim()||"Owner",passcodeHash:hash,super:true};
         await safeSave(ADMIN_KEY,[owner]);setAdmins([owner]);
-        const meObj={id:owner.id,name:owner.name};
+        const meObj={id:owner.id,name:owner.name,super:true,perms:{}};
         setMe(meObj);saveAdminSession(meObj);
         await logActivity(meObj.name,"Signed in","Bootstrapped owner account");
         setAuthed(true);setPc("");setAName("");setAuthBusy(false);return;
@@ -585,7 +626,7 @@ function AdminView(){
     }
     const nl=aName.trim().toLowerCase();
     const match=list.find(a=>a.name.toLowerCase()===nl&&a.passcodeHash===hash);
-    if(match){const meObj={id:match.id,name:match.name};setMe(meObj);saveAdminSession(meObj);await logActivity(meObj.name,"Signed in","");setAuthed(true);setPc("");setAName("");}
+    if(match){const meObj={id:match.id,name:match.name,super:isSuperAdmin(match,list),perms:match.perms||{}};setMe(meObj);saveAdminSession(meObj);await logActivity(meObj.name,"Signed in","");setAuthed(true);setPc("");setAName("");}
     else setAuthErr("Incorrect admin name or passcode.");
     setAuthBusy(false);
   };
@@ -610,7 +651,6 @@ function AdminView(){
   );
 
   const handleLogout=async()=>{ await logActivity(me?.name,"Signed out",""); clearAdminSession(); setAuthed(false); setMe(null); setTab("sessions"); };
-  const TABS=[["sessions","Sessions"],["registrations","Registrations"],["activity","Activity"],["settings","Settings"]];
   return(
     <div style={{width:"100%",maxWidth:980,marginTop:20}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -619,7 +659,7 @@ function AdminView(){
           <h1 style={{fontSize:20,fontWeight:700}}>Dashboard</h1>
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          {TABS.map(([t,l])=>(
+          {visibleTabs.map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${tab===t?C.accent:C.border}`,color:tab===t?C.accent:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>{l}</button>
           ))}
           <button onClick={handleLogout} title="Log out" style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.error}66`,color:C.error,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
@@ -627,10 +667,11 @@ function AdminView(){
           </button>
         </div>
       </div>
-      {tab==="sessions"&&<SessionsTab me={me} sessions={sessions} setSessions={setSessions} allRegs={allRegs} selSid={selSid} setSelSid={setSelSid} setTab={setTab} reload={loadAll}/>}
-      {tab==="registrations"&&<RegistrationsTab me={me} sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
-      {tab==="activity"&&<ActivityTab me={me}/>}
-      {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} setAuthed={setAuthed} setMe={setMe}/>}
+      {tab==="sessions"&&can("sessions")&&<SessionsTab me={me} sessions={sessions} setSessions={setSessions} allRegs={allRegs} selSid={selSid} setSelSid={setSelSid} setTab={setTab} reload={loadAll}/>}
+      {tab==="registrations"&&can("registrations")&&<RegistrationsTab me={me} sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
+      {tab==="activity"&&can("activity")&&<ActivityTab me={me} isSuper={isSuper}/>}
+      {tab==="permissions"&&isSuper&&<PermissionsTab me={me} admins={admins} setAdmins={setAdmins} reload={loadAll}/>}
+      {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} isSuper={isSuper} perms={perms} setAuthed={setAuthed} setMe={setMe}/>}
     </div>
   );
 }
@@ -1008,7 +1049,7 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
   );
 }
 
-function ActivityTab({me}){
+function ActivityTab({me,isSuper}){
   const [log,setLog]=useState([]);
   const [loading,setLoading]=useState(true);
   const [query,setQuery]=useState("");
@@ -1070,7 +1111,7 @@ function ActivityTab({me}){
             <button onClick={()=>setConfClear(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:8,padding:"7px 8px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
           </div>
         ):(
-          <button onClick={()=>setConfClear(true)} disabled={log.length===0} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.error}66`,color:C.error,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:log.length===0?"default":"pointer",opacity:log.length===0?.4:1}}>Clear</button>
+          isSuper&&<button onClick={()=>setConfClear(true)} disabled={log.length===0} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.error}66`,color:C.error,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:log.length===0?"default":"pointer",opacity:log.length===0?.4:1}} title="Superuser only">Clear</button>
         )}
       </div>
 
@@ -1115,7 +1156,109 @@ function ActivityTab({me}){
   );
 }
 
-function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
+function PermissionsTab({me,admins,setAdmins,reload}){
+  const [busyId,setBusyId]=useState(null);
+  const [err,setErr]=useState("");
+
+  const others = admins.filter(a=>!isSuperAdmin(a,admins));
+
+  const setPerm=async(admin,key,value)=>{
+    setBusyId(admin.id);setErr("");
+    const nextPerms={...DEFAULT_PERMS,...permsOf(admin),[key]:value};
+    const next=admins.map(a=>a.id===admin.id?{...a,perms:nextPerms}:a);
+    const ok=await safeSave(ADMIN_KEY,next);
+    if(ok){
+      setAdmins(next);
+      const on=Object.entries(nextPerms).filter(([,v])=>v).map(([k])=>k);
+      await logActivity(me?.name,"Updated permissions",`${admin.name}: ${on.length?on.join(", "):"none"}`);
+    } else setErr("Couldn't save. Please try again.");
+    setBusyId(null);
+  };
+
+  const Toggle=({on,onClick,disabled})=>(
+    <button onClick={onClick} disabled={disabled} role="switch" aria-checked={on}
+      style={{position:"relative",width:42,height:24,borderRadius:12,border:"none",cursor:disabled?"default":"pointer",flexShrink:0,opacity:disabled?.5:1,background:on?C.accent:"rgba(255,255,255,0.18)",transition:"background .2s"}}>
+      <span style={{position:"absolute",top:3,left:on?21:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+    </button>
+  );
+
+  return(
+    <div style={{...glass,padding:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:180}}>
+          <p style={{fontSize:15,fontWeight:600,margin:0}}>Permissions</p>
+          <p style={{fontSize:12,color:C.textFaint,margin:"3px 0 0"}}>Control what each admin can access. The superuser always has full access.</p>
+        </div>
+        <button onClick={reload} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.border}`,color:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>Refresh</button>
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"grid",gap:4,margin:"14px 0 18px"}}>
+        {PERMISSIONS.map(([k,label,desc])=>(
+          <p key={k} style={{fontSize:12,color:C.textFaint,margin:0}}>
+            <span style={{fontFamily:"monospace",color:C.accent}}>{label}</span> — {desc}
+          </p>
+        ))}
+      </div>
+
+      {err&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:8,padding:"8px 12px",marginBottom:12}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{err}</div>}
+
+      {/* Superuser row (read-only) */}
+      {admins.filter(a=>isSuperAdmin(a,admins)).map(a=>(
+        <div key={a.id} style={{background:"rgba(0,174,239,0.06)",border:`1px solid ${C.accent}44`,borderRadius:12,padding:"14px 16px",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:14,fontWeight:600}}>{a.name}</span>
+            <span style={{fontSize:10,fontFamily:"monospace",background:C.accent,color:C.bg,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Superuser</span>
+            {me?.id===a.id&&<span style={{fontSize:11,color:C.accent}}>(you)</span>}
+          </div>
+          <span style={{fontSize:12,color:C.textDim}}>Full access — cannot be restricted</span>
+        </div>
+      ))}
+
+      {others.length===0?(
+        <div style={{textAlign:"center",padding:"36px 0",border:`1px dashed ${C.border}`,borderRadius:12}}>
+          <ShieldCheck size={22} color={C.border} style={{margin:"0 auto 10px"}}/>
+          <p style={{fontSize:14,color:C.textFaint}}>No other admins yet. Add one in Settings to assign permissions.</p>
+        </div>
+      ):(
+        <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
+          <table style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:560}}>
+            <thead>
+              <tr style={{background:"rgba(255,255,255,0.06)"}}>
+                <th style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:"left"}}>Admin</th>
+                {PERMISSIONS.map(([k,label])=>(
+                  <th key={k} style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",textAlign:"center",whiteSpace:"nowrap"}}>{label.replace(/^Manage |^Email \/ /,"").replace("registrations","Regs.")}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {others.map(a=>{
+                const p={...DEFAULT_PERMS,...permsOf(a)};
+                const rowBusy=busyId===a.id;
+                return(
+                  <tr key={a.id} style={{borderTop:`1px solid ${C.border}`,opacity:rowBusy?.6:1}}>
+                    <td style={{padding:"10px 14px",whiteSpace:"nowrap",fontWeight:600}}>
+                      {a.name}{me?.id===a.id&&<span style={{fontSize:11,color:C.accent,marginLeft:6}}>(you)</span>}
+                    </td>
+                    {PERMISSIONS.map(([k])=>(
+                      <td key={k} style={{padding:"10px 14px",textAlign:"center"}}>
+                        <div style={{display:"flex",justifyContent:"center"}}>
+                          <Toggle on={!!p[k]} disabled={rowBusy} onClick={()=>setPerm(a,k,!p[k])}/>
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
   const [nn,setNn]=useState(""); const [np,setNp]=useState(""); const [npc,setNpc]=useState("");
   const [aErr,setAErr]=useState(""); const [aBusy,setABusy]=useState(false);
   const [cp,setCp]=useState(""); const [chp,setChp]=useState(""); const [chpc,setChpc]=useState("");
@@ -1179,7 +1322,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     const h=await hashPC(np);
     if(admins.some(a=>a.passcodeHash===h)){setAErr("That passcode is already in use.");setABusy(false);return;}
     const newName=nn.trim();
-    const ok=await save([...admins,{id:uid(),name:newName,passcodeHash:h}]);
+    const ok=await save([...admins,{id:uid(),name:newName,passcodeHash:h,super:false,perms:{...DEFAULT_PERMS}}]);
     if(ok){await logActivity(me?.name,"Added admin",newName);setNn("");setNp("");setNpc("");}
     else setAErr("Failed to save.");
     setABusy(false);
@@ -1188,6 +1331,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
   const delAdmin=async(id)=>{
     if(admins.length<=1){setAErr("Can't remove the last admin.");setConfDel(null);return;}
     const gone=admins.find(a=>a.id===id);
+    if(gone&&isSuperAdmin(gone,admins)){setAErr("The superuser can't be removed.");setConfDel(null);return;}
     const ok=await save(admins.filter(a=>a.id!==id));
     if(ok){await logActivity(me?.name,"Removed admin",gone?gone.name:id);setConfDel(null);if(me?.id===id){clearAdminSession();setAuthed(false);setMe(null);}}
   };
@@ -1209,13 +1353,17 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
   const sec={...glass,padding:20,display:"grid",gap:10};
   const slbl={fontSize:13,fontWeight:600,color:C.textDim};
 
+  const canSettings = isSuper || !!(perms&&perms.settings);
   return(
     <div style={{display:"grid",gap:16,width:"100%",maxWidth:1000, margin:"0 auto"}}>
+      {isSuper && (<>
       <div style={sec}>
         <p style={slbl}>Admins ({admins.length})</p>
         {admins.map(a=>(
           <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:8}}>
-            <span style={{fontSize:14}}>{a.name}{me?.id===a.id&&<span style={{fontSize:11,color:C.accent,marginLeft:8}}>(you)</span>}</span>
+            <span style={{fontSize:14,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>{a.name}
+              {isSuperAdmin(a,admins)&&<span style={{fontSize:10,fontFamily:"monospace",background:C.accent,color:C.bg,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Superuser</span>}
+              {me?.id===a.id&&<span style={{fontSize:11,color:C.accent}}>(you)</span>}</span>
             {confDel===a.id?(
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 <span style={{fontSize:12,color:C.error}}>Remove?</span>
@@ -1223,7 +1371,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
                 <button onClick={()=>setConfDel(null)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
               </div>
             ):(
-              <button onClick={()=>setConfDel(a.id)} disabled={admins.length<=1} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"4px 7px",cursor:admins.length<=1?"default":"pointer",opacity:admins.length<=1?.3:1,display:"flex"}}><Trash2 size={13}/></button>
+              <button onClick={()=>setConfDel(a.id)} disabled={admins.length<=1||isSuperAdmin(a,admins)} title={isSuperAdmin(a,admins)?"The superuser can't be removed":"Remove admin"} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"4px 7px",cursor:(admins.length<=1||isSuperAdmin(a,admins))?"default":"pointer",opacity:(admins.length<=1||isSuperAdmin(a,admins))?.3:1,display:"flex"}}><Trash2 size={13}/></button>
             )}
           </div>
         ))}
@@ -1239,6 +1387,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
           {aBusy?<><Loader2 size={13} className="animate-spin"/>Adding...</>:<><Plus size={13}/>Add admin</>}
         </button>
       </div>
+      </>)}
 
       <div style={sec}>
         <p style={slbl}>Change my passcode</p>
@@ -1253,6 +1402,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
       </div>
 
       {/* Apps Script email config + OTP toggle */}
+      {canSettings && (
       <div style={sec}>
         <p style={slbl}>Email / OTP verification (Google Apps Script)</p>
         <p style={{fontSize:12,color:C.textFaint,lineHeight:1.6,marginBottom:10}}>
@@ -1305,6 +1455,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
           </>
         )}
       </div>
+      )}
     </div>
   );
 }
