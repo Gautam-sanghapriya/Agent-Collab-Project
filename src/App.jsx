@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Check, AlertCircle, Loader2, Download, Users, ClipboardList,
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
-  ArrowUpDown, Plus, Calendar
+  ArrowUpDown, Plus, Calendar, LogOut
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./utils/supabase";
 
@@ -12,6 +12,22 @@ const regKey = (sid) => `ai-ready-reg-1782870003-${sid}`;
 
 const BOOTSTRAP_PASSCODE = "aiready2026";
 const EMAIL_CFG_KEY  = "ai-ready-emailcfg-1782870003";
+const ADMIN_SESSION_KEY = "ai-ready-adminsession-1782870003";
+const ACTIVITY_KEY = "ai-ready-activity-1782870003";
+const ACTIVITY_MAX = 500; // keep the most recent N entries
+
+// Remember the signed-in admin for the browser session (survives reloads,
+// clears when the tab is closed). Stores identity only — never the passcode.
+function loadAdminSession(){
+  try{ const raw = sessionStorage.getItem(ADMIN_SESSION_KEY); return raw ? JSON.parse(raw) : null; }
+  catch{ return null; }
+}
+function saveAdminSession(me){
+  try{ sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(me)); }catch{}
+}
+function clearAdminSession(){
+  try{ sessionStorage.removeItem(ADMIN_SESSION_KEY); }catch{}
+}
 
 // Shri Tech Partners brand tokens
 const C = {
@@ -88,6 +104,17 @@ async function copyToClipboard(text){
 }
 
 const fmt=(iso)=>iso?new Date(iso).toLocaleString():"—";
+
+// Append-only admin audit log. Records who did what and when.
+async function logActivity(actor, action, detail){
+  try{
+    const r = await safeGet(ACTIVITY_KEY);
+    const list = r ? JSON.parse(r.value) : [];
+    list.push({ id: uid(), at: new Date().toISOString(), actor: actor || "Unknown", action, detail: detail || "" });
+    const trimmed = list.length > ACTIVITY_MAX ? list.slice(list.length - ACTIVITY_MAX) : list;
+    await safeSave(ACTIVITY_KEY, trimmed);
+  }catch{}
+}
 
 export default function App(){
   const [view,setView]=useState("register");
@@ -241,7 +268,8 @@ function RegisterView(){
   useEffect(()=>{
     (async()=>{
       const r  = await safeGet(SESSIONS_KEY);
-      const list = r ? JSON.parse(r.value) : [];
+      const all = r ? JSON.parse(r.value) : [];
+      const list = all.filter(s => s.active); // only active sessions show publicly
       setSessions(list);
       if(list.length === 1) setSess(list[0]);
       // Load email config { url, otpRequired }
@@ -514,10 +542,11 @@ function RegisterView(){
 
 
 function AdminView(){
-  const [authed,setAuthed]=useState(false);
+  const __restored = loadAdminSession();
+  const [authed,setAuthed]=useState(!!__restored);
   const [aName,setAName]=useState(""); const [pc,setPc]=useState("");
   const [authErr,setAuthErr]=useState(""); const [authBusy,setAuthBusy]=useState(false);
-  const [admins,setAdmins]=useState([]); const [me,setMe]=useState(null);
+  const [admins,setAdmins]=useState([]); const [me,setMe]=useState(__restored);
   const [tab,setTab]=useState("sessions");
   const [sessions,setSessions]=useState([]);
   const [selSid,setSelSid]=useState(null);
@@ -546,14 +575,17 @@ function AdminView(){
     if(list.length===0){
       if(pc===BOOTSTRAP_PASSCODE){
         const owner={id:uid(),name:aName.trim()||"Owner",passcodeHash:hash};
-        await safeSave(ADMIN_KEY,[owner]);setAdmins([owner]);setMe({id:owner.id,name:owner.name});
+        await safeSave(ADMIN_KEY,[owner]);setAdmins([owner]);
+        const meObj={id:owner.id,name:owner.name};
+        setMe(meObj);saveAdminSession(meObj);
+        await logActivity(meObj.name,"Signed in","Bootstrapped owner account");
         setAuthed(true);setPc("");setAName("");setAuthBusy(false);return;
       }
       setAuthErr("Incorrect admin name or passcode.");setAuthBusy(false);return;
     }
     const nl=aName.trim().toLowerCase();
     const match=list.find(a=>a.name.toLowerCase()===nl&&a.passcodeHash===hash);
-    if(match){setMe({id:match.id,name:match.name});setAuthed(true);setPc("");setAName("");}
+    if(match){const meObj={id:match.id,name:match.name};setMe(meObj);saveAdminSession(meObj);await logActivity(meObj.name,"Signed in","");setAuthed(true);setPc("");setAName("");}
     else setAuthErr("Incorrect admin name or passcode.");
     setAuthBusy(false);
   };
@@ -577,7 +609,8 @@ function AdminView(){
     </div>
   );
 
-  const TABS=[["sessions","Sessions"],["registrations","Registrations"],["settings","Settings"]];
+  const handleLogout=async()=>{ await logActivity(me?.name,"Signed out",""); clearAdminSession(); setAuthed(false); setMe(null); setTab("sessions"); };
+  const TABS=[["sessions","Sessions"],["registrations","Registrations"],["activity","Activity"],["settings","Settings"]];
   return(
     <div style={{width:"100%",maxWidth:980,marginTop:20}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -585,14 +618,18 @@ function AdminView(){
           <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:4}}>Admin · {me?.name}</p>
           <h1 style={{fontSize:20,fontWeight:700}}>Dashboard</h1>
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {TABS.map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${tab===t?C.accent:C.border}`,color:tab===t?C.accent:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>{l}</button>
           ))}
+          <button onClick={handleLogout} title="Log out" style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.error}66`,color:C.error,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            <LogOut size={13}/>Logout
+          </button>
         </div>
       </div>
-      {tab==="sessions"&&<SessionsTab sessions={sessions} setSessions={setSessions} allRegs={allRegs} selSid={selSid} setSelSid={setSelSid} setTab={setTab} reload={loadAll}/>}
-      {tab==="registrations"&&<RegistrationsTab sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
+      {tab==="sessions"&&<SessionsTab me={me} sessions={sessions} setSessions={setSessions} allRegs={allRegs} selSid={selSid} setSelSid={setSelSid} setTab={setTab} reload={loadAll}/>}
+      {tab==="registrations"&&<RegistrationsTab me={me} sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
+      {tab==="activity"&&<ActivityTab me={me}/>}
       {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} setAuthed={setAuthed} setMe={setMe}/>}
     </div>
   );
@@ -607,7 +644,7 @@ function StatCard({label,value,small}){
   );
 }
 
-function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
+function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
   const [showForm,setShowForm]=useState(false);
   const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState("");
   const [fErr,setFErr]=useState(""); const [busy,setBusy]=useState(false);
@@ -620,10 +657,10 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
   const create=async()=>{
     if(!title.trim()){setFErr("Session title is required.");return;}
     setBusy(true);setFErr("");
-    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),active:sessions.length===0,createdAt:new Date().toISOString()};
+    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),active:true,createdAt:new Date().toISOString()};
     const next=[...sessions,s];
     const ok=await safeSave(SESSIONS_KEY,next);
-    if(ok){setSessions(next);setTitle("");setDesc("");setDate("");setShowForm(false);}
+    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setShowForm(false);}
     else setFErr("Failed to save.");
     setBusy(false);
   };
@@ -641,14 +678,22 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
     setEditBusy(true);setEditErr("");
     const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim()}:s);
     const ok=await safeSave(SESSIONS_KEY,next);
-    if(ok){setSessions(next);cancelEdit();}
+    if(ok){await logActivity(me?.name,"Edited session",`${editDraft.title.trim()} [${editSid}]`);setSessions(next);cancelEdit();}
     else setEditErr("Failed to save. Try again.");
     setEditBusy(false);
   };
 
+  const toggleActive=async(s)=>{
+    const next=sessions.map(x=>x.id===s.id?{...x,active:!x.active}:x);
+    const ok=await safeSave(SESSIONS_KEY,next);
+    if(ok){await logActivity(me?.name,s.active?"Deactivated session":"Activated session",`${s.title} [${s.id}]`);setSessions(next);}
+  };
+
   const del=async(sid)=>{
+    const gone=sessions.find(s=>s.id===sid);
     const next=sessions.filter(s=>s.id!==sid);
     if(await safeSave(SESSIONS_KEY,next)){
+      await logActivity(me?.name,"Deleted session",gone?`${gone.title} [${sid}]`:sid);
       setSessions(next);setConfDel(null);
       if(selSid===sid&&next.length>0) setSelSid(next[0].id);
     }
@@ -739,7 +784,9 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                          {s.active&&<span style={{fontSize:10,fontFamily:"monospace",background:C.accent,color:C.bg,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Pinned</span>}
+                          {s.active
+                            ? <span style={{fontSize:10,fontFamily:"monospace",background:C.accent,color:C.bg,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Active</span>
+                            : <span style={{fontSize:10,fontFamily:"monospace",background:"rgba(255,255,255,0.08)",color:C.textFaint,fontWeight:700,borderRadius:4,padding:"2px 7px",textTransform:"uppercase"}}>Inactive</span>}
                           <span style={{fontSize:10,fontFamily:"monospace",color:C.textFaint}}>{s.id}</span>
                         </div>
                         <p style={{fontSize:14,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p>
@@ -747,6 +794,11 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
                         {s.description&&<p style={{fontSize:12,color:C.textDim,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.description}</p>}
                       </div>
                       <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                        <button onClick={()=>toggleActive(s)} role="switch" aria-checked={s.active}
+                          title={s.active?"Active — visible on the registration page. Click to hide.":"Inactive — hidden from the registration page. Click to show."}
+                          style={{position:"relative",width:38,height:22,borderRadius:11,border:"none",cursor:"pointer",flexShrink:0,background:s.active?C.accent:"rgba(255,255,255,0.18)",transition:"background .2s",marginRight:2}}>
+                          <span style={{position:"absolute",top:3,left:s.active?19:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+                        </button>
                         <button onClick={()=>startEdit(s)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"5px 7px",cursor:"pointer",display:"flex",alignItems:"center"}} title="Edit session">
                           <Pencil size={13}/>
                         </button>
@@ -771,7 +823,7 @@ function SessionsTab({sessions,setSessions,allRegs,selSid,setSelSid,setTab,reloa
   );
 }
 
-function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,reload}){
+function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loading,reload}){
   const [query,setQuery]=useState("");
   const [sk,setSk]=useState("registeredAt"); const [sd,setSd]=useState("desc");
   const [editEmail,setEditEmail]=useState(null); const [draft,setDraft]=useState({});
@@ -826,15 +878,16 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
     if(regs.some(r=>r.email!==editEmail&&r.email===e)){setEditErr("Email already in use.");return;}
     const next=regs.map(r=>r.email===editEmail?{...r,...draft,email:e}:r);
     const ok=await persist(next);
-    if(ok){setEditEmail(null);setDraft({});setEditErr("");}
+    if(ok){await logActivity(me?.name,"Edited registration",`${e} in ${selSid}`);setEditEmail(null);setDraft({});setEditErr("");}
   };
 
   const delReg=async(email)=>{
     const ok=await persist(regs.filter(r=>r.email!==email));
-    if(ok) setConfDel(null);
+    if(ok){await logActivity(me?.name,"Deleted registration",`${email} from ${selSid}`);setConfDel(null);}
   };
 
   const exportCsv=()=>{
+    logActivity(me?.name,"Exported registrations",`${selSid} (${display.length} rows)`);
     const hdr=["Name","Email","Registered At","Status"];
     const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.email,fmt(r.registeredAt),st.label];});
     const csv = [hdr,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
@@ -955,6 +1008,113 @@ function RegistrationsTab({sessions,allRegs,setAllRegs,selSid,setSelSid,loading,
   );
 }
 
+function ActivityTab({me}){
+  const [log,setLog]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [query,setQuery]=useState("");
+  const [confClear,setConfClear]=useState(false);
+  const [busy,setBusy]=useState(false);
+
+  const load=useCallback(async()=>{
+    setLoading(true);
+    const r=await safeGet(ACTIVITY_KEY);
+    setLog(r?JSON.parse(r.value):[]);
+    setLoading(false);
+  },[]);
+  useEffect(()=>{ load(); },[load]);
+
+  const display=useMemo(()=>{
+    const rev=[...log].reverse(); // newest first
+    const q=query.trim().toLowerCase();
+    if(!q) return rev;
+    return rev.filter(e=>[e.actor,e.action,e.detail].some(v=>(v||"").toLowerCase().includes(q)));
+  },[log,query]);
+
+  const exportCsv=()=>{
+    const hdr=["Time","Admin","Action","Detail"];
+    const rows=display.map(e=>[fmt(e.at),e.actor,e.action,e.detail]);
+    const csv=[hdr,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`activity-log-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  const clearLog=async()=>{
+    setBusy(true);
+    await safeSave(ACTIVITY_KEY,[]);
+    await logActivity(me?.name,"Cleared activity log","");
+    setConfClear(false);
+    await load();
+    setBusy(false);
+  };
+
+  if(loading) return <div style={{...glass,padding:28,display:"flex",alignItems:"center",gap:8,color:C.textFaint,justifyContent:"center"}}><Loader2 size={16} className="animate-spin"/>Loading...</div>;
+
+  return(
+    <div style={{...glass,padding:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:180}}>
+          <p style={{fontSize:15,fontWeight:600,margin:0}}>Activity log</p>
+          <p style={{fontSize:12,color:C.textFaint,margin:"3px 0 0"}}>{log.length} event{log.length!==1?"s":""} recorded{log.length>=ACTIVITY_MAX?` (showing latest ${ACTIVITY_MAX})`:""}</p>
+        </div>
+        <button onClick={load} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.border}`,color:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>Refresh</button>
+        <button onClick={exportCsv} disabled={display.length===0} onMouseEnter={e=>{if(display.length>0)ctaHover(e);}} onMouseLeave={ctaLeave} style={{fontFamily:"monospace",fontSize:12,background:C.accent,color:C.bg,fontWeight:600,border:"none",borderRadius:12,padding:"7px 12px",display:"flex",alignItems:"center",gap:6,cursor:display.length===0?"default":"pointer",opacity:display.length===0?.4:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          <Download size={13}/>Export
+        </button>
+        {confClear?(
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:12,color:C.error}}>Clear all?</span>
+            <button onClick={clearLog} disabled={busy} style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:8,padding:"7px 10px",cursor:busy?"default":"pointer"}}>Confirm</button>
+            <button onClick={()=>setConfClear(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:8,padding:"7px 8px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
+          </div>
+        ):(
+          <button onClick={()=>setConfClear(true)} disabled={log.length===0} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${C.error}66`,color:C.error,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:log.length===0?"default":"pointer",opacity:log.length===0?.4:1}}>Clear</button>
+        )}
+      </div>
+
+      <div style={{position:"relative",marginBottom:12}}>
+        <Search size={13} color={C.textFaint} style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}/>
+        <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by admin, action, or detail..." style={{...iSty,paddingLeft:32}} onFocus={fi} onBlur={fo}/>
+      </div>
+
+      {log.length===0?(
+        <div style={{textAlign:"center",padding:"48px 0",border:`1px dashed ${C.border}`,borderRadius:12}}>
+          <ClipboardList size={22} color={C.border} style={{margin:"0 auto 10px"}}/>
+          <p style={{fontSize:14,color:C.textFaint}}>No activity recorded yet.</p>
+        </div>
+      ):display.length===0?(
+        <div style={{textAlign:"center",padding:"32px 0",color:C.textFaint,fontSize:14}}>No results match "{query}".</div>
+      ):(
+        <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
+          <table style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:620}}>
+            <thead>
+              <tr style={{background:"rgba(255,255,255,0.06)"}}>
+                {["When","Admin","Action","Detail"].map(h=>(
+                  <th key={h} style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap",textAlign:"left"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {display.map(e=>(
+                <tr key={e.id} style={{borderTop:`1px solid ${C.border}`}}>
+                  <td style={{padding:"9px 14px",whiteSpace:"nowrap",fontFamily:"monospace",fontSize:11,color:C.textFaint}}>{fmt(e.at)}</td>
+                  <td style={{padding:"9px 14px",whiteSpace:"nowrap",fontWeight:600}}>{e.actor}</td>
+                  <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                    <span style={{fontSize:11,fontWeight:600,fontFamily:"monospace",color:C.accent,background:`${C.accent}1A`,borderRadius:4,padding:"2px 8px"}}>{e.action}</span>
+                  </td>
+                  <td style={{padding:"9px 14px",color:C.textDim,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.detail||"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
   const [nn,setNn]=useState(""); const [np,setNp]=useState(""); const [npc,setNpc]=useState("");
   const [aErr,setAErr]=useState(""); const [aBusy,setABusy]=useState(false);
@@ -987,7 +1147,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     if(asUrl.trim() && !asUrl.includes("script.google.com")){ setAsErr("That doesn't look like an Apps Script URL."); return; }
     setAsBusy(true);
     const ok = await safeSave(EMAIL_CFG_KEY, { url: asUrl.trim(), otpRequired: otpOn });
-    if(ok) setAsOk("Settings saved." + (otpOn ? " OTP verification is ON." : " OTP verification is OFF — users can register directly."));
+    if(ok){ await logActivity(me?.name,"Updated email/OTP settings",otpOn?"OTP verification ON":"OTP verification OFF"); setAsOk("Settings saved." + (otpOn ? " OTP verification is ON." : " OTP verification is OFF — users can register directly.")); }
     else setAsErr("Failed to save. Try again.");
     setAsBusy(false);
   };
@@ -1000,6 +1160,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     setAsTesting(true);
     try {
       await sendOtpEmail({ url: asUrl.trim() }, "TEST-RECIPIENT", me.name || "Admin", "0000", "Connection Test");
+      await logActivity(me?.name,"Sent test email request","");
       setAsTestMsg("Test request sent to the Apps Script. Check your Apps Script → Executions log to confirm it ran. Note: the browser can't read the response, so this only confirms the request was dispatched.");
     } catch(e) {
       setAsErr("Could not dispatch the request: " + (e.message || "unknown error"));
@@ -1017,16 +1178,18 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     setABusy(true);
     const h=await hashPC(np);
     if(admins.some(a=>a.passcodeHash===h)){setAErr("That passcode is already in use.");setABusy(false);return;}
-    const ok=await save([...admins,{id:uid(),name:nn.trim(),passcodeHash:h}]);
-    if(ok){setNn("");setNp("");setNpc("");}
+    const newName=nn.trim();
+    const ok=await save([...admins,{id:uid(),name:newName,passcodeHash:h}]);
+    if(ok){await logActivity(me?.name,"Added admin",newName);setNn("");setNp("");setNpc("");}
     else setAErr("Failed to save.");
     setABusy(false);
   };
 
   const delAdmin=async(id)=>{
     if(admins.length<=1){setAErr("Can't remove the last admin.");setConfDel(null);return;}
+    const gone=admins.find(a=>a.id===id);
     const ok=await save(admins.filter(a=>a.id!==id));
-    if(ok){setConfDel(null);if(me?.id===id){setAuthed(false);setMe(null);}}
+    if(ok){await logActivity(me?.name,"Removed admin",gone?gone.name:id);setConfDel(null);if(me?.id===id){clearAdminSession();setAuthed(false);setMe(null);}}
   };
 
   const changePass=async()=>{
@@ -1038,7 +1201,7 @@ function SettingsTab({admins,setAdmins,me,setAuthed,setMe}){
     if(!m||m.passcodeHash!==ch){setCErr("Current passcode is incorrect.");setCBusy(false);return;}
     const nh=await hashPC(chp);
     const ok=await save(admins.map(a=>a.id===me.id?{...a,passcodeHash:nh}:a));
-    if(ok){setCp("");setChp("");setChpc("");setCOk("Passcode updated successfully.");}
+    if(ok){await logActivity(me?.name,"Changed own passcode","");setCp("");setChp("");setChpc("");setCOk("Passcode updated successfully.");}
     else setCErr("Failed to save.");
     setCBusy(false);
   };
