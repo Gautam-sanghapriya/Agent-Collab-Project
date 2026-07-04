@@ -279,15 +279,58 @@ function renderTemplate(str, vars){
 
 const EMAIL_PLACEHOLDERS = ["name","email","session_title","session_date"];
 
+// Wrap a message in the AI Ready branded email shell (matches app.jsx tokens).
+// Frosted glass, email-safely: a navy base with cyan accent glows, and a
+// translucent card. backdrop-filter gives real frost on WebKit clients (Apple
+// Mail) and in the in-app preview; the rgba fill keeps it glassy on Gmail; the
+// bgcolor attribute degrades to a solid navy panel on Outlook.
+function buildBrandedEmail(opts){
+  var o = opts || {};
+  var bodyHtml = o.bodyHtml || "";
+  var eyebrow = o.eyebrow || "AI Ready";
+  var sessionTitle = o.sessionTitle || "";
+  var sessionDate = o.sessionDate || "";
+  // Session detail — simple frost-glass panel (fonts kept; no cyan accent).
+  var sessionCard = sessionTitle ? (
+    '<tr><td style="padding:22px 26px 0 26px;">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#1c3e5e" style="background-color:rgba(255,255,255,0.05);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.12);border-radius:12px;">' +
+        '<tr><td style="padding:16px 18px;">' +
+          '<p style="margin:0;font-family:monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,0.50);text-transform:uppercase;">Session</p>' +
+          '<p style="margin:6px 0 0 0;font-size:15px;font-weight:700;color:#FFFFFF;">' + sessionTitle + '</p>' +
+          (sessionDate ? '<p style="margin:5px 0 0 0;font-size:13px;color:rgba(255,255,255,0.65);">' + sessionDate + '</p>' : '') +
+        '</td></tr>' +
+      '</table>' +
+    '</td></tr>'
+  ) : '';
+  return '' +
+  '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>' +
+  '<meta name="color-scheme" content="dark"/></head>' +
+  '<body style="margin:0;padding:0;background-color:#1b3a5c;">' +
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#1b3a5c" style="background-color:#1b3a5c;background-image:radial-gradient(circle at 12% -5%, rgba(0,174,239,0.30), rgba(0,174,239,0) 42%), radial-gradient(circle at 92% 108%, rgba(0,174,239,0.22), rgba(0,174,239,0) 48%);padding:40px 16px;">' +
+  '<tr><td align="center">' +
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#173a5b" style="max-width:480px;width:100%;background-color:rgba(19,39,62,0.72);background-image:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 140px);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border:1px solid rgba(0,174,239,0.26);border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.35), 0 0 46px rgba(0,174,239,0.12);overflow:hidden;font-family:Arial,Helvetica,sans-serif;">' +
+    // eyebrow label only (no brand row, no subject heading)
+    '<tr><td style="padding:26px 26px 0 26px;"><p style="margin:0;font-family:monospace;font-size:11px;letter-spacing:2px;color:#00aeef;text-transform:uppercase;">' + eyebrow + '</p></td></tr>' +
+    // body
+    '<tr><td style="padding:16px 26px 0 26px;font-size:14px;color:rgba(255,255,255,0.82);line-height:1.7;">' + bodyHtml + '</td></tr>' +
+    sessionCard +
+    // footer
+    '<tr><td style="padding:24px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid rgba(0,174,239,0.15);padding-top:16px;"><p style="margin:0;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">You are receiving this because you registered with AI Ready.</p></td></tr></table></td></tr>' +
+    '<tr><td style="padding:16px 26px 24px 26px;"><p style="margin:0;font-family:monospace;font-size:10px;color:rgba(255,255,255,0.40);text-align:center;letter-spacing:0.5px;">Registrations are stored securely and never shared with third parties.</p></td></tr>' +
+  '</table>' +
+  '</td></tr></table></body></html>';
+}
+
 const DEFAULT_TEMPLATES = {
   confirmation: {
     enabled: false,
     subject: "You're registered for {{session_title}}",
-    body: "Hi {{name}},\n\nThanks for registering for {{session_title}}.\nDate: {{session_date}}\n\nYour spot is confirmed — we look forward to seeing you there.\n\nAI Ready"
+    body: "Hi {{name}},\n\nThanks for registering — your spot is confirmed. We look forward to seeing you there!"
   },
   bulk: {
     subject: "An update about {{session_title}}",
-    body: "Hi {{name}},\n\n(Write your message here.)\n\nAI Ready"
+    body: "Hi {{name}},\n\n(Write your message here.)"
   }
 };
 
@@ -375,7 +418,8 @@ function RegisterView(){
       if(conf && conf.enabled && emailCfg && emailCfg.url){
         const vars = { name:name.trim(), email:norm, session_title:sess.title, session_date:sess.date||"" };
         const subject = renderTemplate(conf.subject, vars);
-        const html = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
+        const inner = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
+        const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"" });
         postToAppsScript(emailCfg, { type:"confirmation", to_email:norm, to_name:name.trim(), subject, html }).catch(()=>{});
       }
     }catch(e){ /* ignore — registration already saved */ }
@@ -1264,7 +1308,8 @@ function EmailsTab({me,sessions,allRegs}){
     setTestBusy(true);
     const vars={ name:"Test User", email:testTo.trim(), session_title:"Sample Session", session_date:"1 Jan 2026 · 10:00 AM" };
     const subject=renderTemplate(cSubject,vars);
-    const html=renderTemplate(cBody,vars).replace(/\n/g,"<br>");
+    const inner=renderTemplate(cBody,vars).replace(/\n/g,"<br>");
+    const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Registration confirmed",sessionTitle:vars.session_title,sessionDate:vars.session_date});
     try{ await postToAppsScript({url:cfgUrl},{type:"confirmation",to_email:testTo.trim(),to_name:"Test User",subject,html}); await logActivity(me?.name,"Sent confirmation test email",testTo.trim());
       setTestMsg("Test dispatched to "+testTo.trim()+". Delivery can't be confirmed from the browser — check your Apps Script executions.");
     }catch(e){ setCErr("Could not dispatch the test."); }
@@ -1285,7 +1330,8 @@ function EmailsTab({me,sessions,allRegs}){
       const r=targets[i];
       const vars={ name:r.name, email:r.email, session_title:(sess&&sess.title)||"", session_date:(sess&&sess.date)||"" };
       const subject=renderTemplate(bSubject,vars);
-      const html=renderTemplate(bBody,vars).replace(/\n/g,"<br>");
+      const inner=renderTemplate(bBody,vars).replace(/\n/g,"<br>");
+      const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date});
       try{ await postToAppsScript({url:cfgUrl},{type:"bulk",to_email:r.email,to_name:r.name,subject,html}); }catch(e){}
       setProgress({done:i+1,total:targets.length});
       await new Promise(res=>setTimeout(res,250)); // gentle pacing for Apps Script quotas
@@ -1304,6 +1350,15 @@ function EmailsTab({me,sessions,allRegs}){
   );
 
   if(loading) return <div style={{...glass,padding:28,display:"flex",alignItems:"center",gap:8,color:C.textFaint,justifyContent:"center"}}><Loader2 size={16} className="animate-spin"/>Loading...</div>;
+
+  // Live previews (sample data filled into placeholders, wrapped in brand shell)
+  const sampleSess = sessions[0] || {};
+  const confVars = { name:"Ada Lovelace", email:"ada@example.com", session_title:sampleSess.title||"AI Basics for Teams", session_date:sampleSess.date||"15 Aug 2026 · 3:00 PM IST" };
+  const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date });
+  const bulkSess = sessions.find(s=>s.id===bSid) || {};
+  const bulkVars = { name:(recips[0]&&recips[0].name)||"Ada Lovelace", email:(recips[0]&&recips[0].email)||"ada@example.com", session_title:bulkSess.title||"", session_date:bulkSess.date||"" };
+  const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date });
+  const previewLabel = (t)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>{t}</label><span style={{fontSize:10,color:C.textFaint}}>sample data</span></div>);
 
   return(
     <div data-testid="emails-tab" style={{display:"grid",gap:16}}>
@@ -1354,6 +1409,10 @@ function EmailsTab({me,sessions,allRegs}){
               {testBusy?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test"}
             </button>
           </div>
+        </div>
+        <div>
+          {previewLabel("PREVIEW")}
+          <iframe data-testid="email-confirm-preview" title="Confirmation email preview" srcDoc={confPreview} style={{width:"100%",height:440,border:`1px solid ${C.border}`,borderRadius:12,background:"#1b3a5c"}}/>
         </div>
       </div>
 
@@ -1411,6 +1470,10 @@ function EmailsTab({me,sessions,allRegs}){
             <div style={{height:"100%",width:`${progress.total?Math.round(progress.done/progress.total*100):0}%`,background:C.accent,transition:"width .2s"}}/>
           </div>
         )}
+        <div>
+          {previewLabel("PREVIEW")}
+          <iframe data-testid="bulk-preview" title="Bulk email preview" srcDoc={bulkPreview} style={{width:"100%",height:440,border:`1px solid ${C.border}`,borderRadius:12,background:"#1b3a5c"}}/>
+        </div>
         <button data-testid="bulk-send-btn" onClick={sendBulk} disabled={sending||!cfgUrl||checked.size===0}
           className={(sending||!cfgUrl||checked.size===0)?"":"neon-glow"}
           style={{background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"11px 16px",cursor:(sending||!cfgUrl||checked.size===0)?"default":"pointer",opacity:(sending||!cfgUrl||checked.size===0)?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}
