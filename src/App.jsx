@@ -141,7 +141,7 @@ export default function App(){
   const [view,setView]=useState("register");
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
-      <style>{`.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
+      <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
       <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:C.accentHover,opacity:.14,filter:"blur(100px)",pointerEvents:"none"}}/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
@@ -508,7 +508,7 @@ function RegisterView(){
   );
 
   if(sessions.length === 0) return(
-    <div style={{maxWidth:420,padding:36,textAlign:"center",...glass,marginTop:20}}>
+    <div className="rpad" style={{maxWidth:420,padding:36,textAlign:"center",...glass,marginTop:20}}>
       <Calendar size={28} color={C.textFaint} style={{margin:"0 auto 12px"}}/>
       <h2 style={{fontSize:18,fontWeight:600,marginBottom:8}}>No sessions available</h2>
       <p style={{fontSize:14,color:C.textDim,lineHeight:1.6}}>There are no open sessions right now. Check back soon.</p>
@@ -518,7 +518,7 @@ function RegisterView(){
   // ── Session picker ────────────────────────────────────────────────────────
   if(!sess) return(
     <div style={{width:"100%",maxWidth:480,marginTop:20}}>
-      <div style={{padding:"28px 32px 24px",...glass,marginBottom:16}}>
+      <div className="rpad" style={{padding:"28px 32px 24px",...glass,marginBottom:16}}>
         <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>AI Ready · Registration</p>
         <h1 style={{fontSize:22,fontWeight:700,marginBottom:6}}>Select your session</h1>
         <p style={{fontSize:13,color:C.textDim}}>Choose the session you'd like to register for.</p>
@@ -547,7 +547,7 @@ function RegisterView(){
 
   // ── Success ───────────────────────────────────────────────────────────────
   if(step === "success") return(
-    <div data-testid="register-success" style={{maxWidth:440,padding:36,textAlign:"center",...glass,marginTop:20}}>
+    <div data-testid="register-success" className="rpad" style={{maxWidth:440,padding:36,textAlign:"center",...glass,marginTop:20}}>
       <div style={{width:52,height:52,margin:"0 auto 16px",borderRadius:"50%",background:`${C.accent}1A`,border:`1px solid ${C.accent}4D`,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <Check color={C.accent} size={24}/>
       </div>
@@ -564,7 +564,7 @@ function RegisterView(){
 
   // ── OTP Verification step ─────────────────────────────────────────────────
   if(step === "otp") return(
-    <div style={{width:"100%",maxWidth:420,padding:36,...glass,marginTop:20}}>
+    <div className="rpad" style={{width:"100%",maxWidth:420,padding:36,...glass,marginTop:20}}>
       {sessions.length>1&&(
         <button onClick={()=>setStep("form")} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>← Back</button>
       )}
@@ -615,7 +615,7 @@ function RegisterView(){
 
   // ── Step 1: Registration form ─────────────────────────────────────────────
   return(
-    <div style={{width:"100%",maxWidth:440,padding:36,...glass,marginTop:20}}>
+    <div className="rpad" style={{width:"100%",maxWidth:440,padding:36,...glass,marginTop:20}}>
       {sessions.length>1&&(
         <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>
           ← All sessions
@@ -726,7 +726,7 @@ function AdminView(){
   };
 
   if(!authed) return(
-    <div style={{width:"100%",maxWidth:380,padding:32,...glass,marginTop:20}}>
+    <div className="rpad" style={{width:"100%",maxWidth:380,padding:32,...glass,marginTop:20}}>
       <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:10}}>Admin</p>
       <h1 style={{fontSize:20,fontWeight:600,marginBottom:20}}>Sign in</h1>
       <div onKeyDown={e=>{if(e.key==="Enter")handleAuth();}}>
@@ -752,7 +752,7 @@ function AdminView(){
           <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:4}}>Admin · {me?.name}</p>
           <h1 style={{fontSize:20,fontWeight:700}}>Dashboard</h1>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <div className="rfs" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",maxWidth:"100%",overflowX:"auto",paddingBottom:2}}>
           {visibleTabs.map(([t,l])=>(
             <button key={t} data-testid={"tab-"+t} onClick={()=>setTab(t)} style={{fontFamily:"monospace",fontSize:12,border:`1px solid ${tab===t?C.accent:C.border}`,color:tab===t?C.accent:C.textFaint,background:"transparent",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>{l}</button>
           ))}
@@ -767,6 +767,126 @@ function AdminView(){
       {tab==="emails"&&can("emails")&&<EmailsTab me={me} sessions={sessions} allRegs={allRegs}/>}
       {tab==="permissions"&&isSuper&&<PermissionsTab me={me} admins={admins} setAdmins={setAdmins} reload={loadAll}/>}
       {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} isSuper={isSuper} perms={perms} setAuthed={setAuthed} setMe={setMe}/>}
+    </div>
+  );
+}
+
+// ── DateTimePicker — frost-glass date & time picker matching the app style ──
+// The input stays freely editable; the calendar button opens a themed popover.
+// Applies the app's standard format: "15 Aug 2026 · 3:00 PM IST".
+const DTP_MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DTP_TIMEZONES=["IST","UTC","GMT","BST","CET","CEST","EET","GST","SGT","HKT","JST","KST","AEST","AEDT","NZST","EST","EDT","CST","CDT","MST","MDT","PST","PDT","BRT"];
+function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
+  const [open,setOpen]=useState(false);
+  const [view,setView]=useState(()=>{const n=new Date();return {y:n.getFullYear(),m:n.getMonth()};});
+  const [selDay,setSelDay]=useState(null);   // {y,m,d}
+  const [hh,setHh]=useState(3); const [mm,setMm]=useState(0); const [ap,setAp]=useState("PM");
+  const [tz,setTz]=useState("IST");
+
+  // When opening, try to prefill from the current value if it matches our format.
+  const openPicker=()=>{
+    const m=/^(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) · (\d{1,2}):(\d{2}) (AM|PM)(?: ([A-Z]{2,5}))?/.exec((value||"").trim());
+    if(m){
+      const y=+m[3], mo=DTP_MONTHS.indexOf(m[2]), d=+m[1];
+      setView({y,m:mo}); setSelDay({y,m:mo,d});
+      setHh(+m[4]); setMm(+m[5]); setAp(m[6]);
+      if(m[7]&&DTP_TIMEZONES.includes(m[7])) setTz(m[7]);
+    } else {
+      const n=new Date(); setView({y:n.getFullYear(),m:n.getMonth()}); setSelDay(null);
+    }
+    setOpen(true);
+  };
+
+  const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
+  const firstDow=(y,m)=>new Date(y,m,1).getDay(); // 0=Sun
+  const nav=(d)=>setView(v=>{let m=v.m+d,y=v.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} return {y,m};});
+  const apply=()=>{
+    if(!selDay) return;
+    const str=`${selDay.d} ${DTP_MONTHS[selDay.m]} ${selDay.y} · ${hh}:${String(mm).padStart(2,"0")} ${ap} ${tz}`;
+    onChange(str); setOpen(false);
+  };
+  const clear=()=>{ onChange(""); setOpen(false); };
+  const today=new Date();
+  const isToday=(d)=>view.y===today.getFullYear()&&view.m===today.getMonth()&&d===today.getDate();
+  const isSel=(d)=>selDay&&selDay.y===view.y&&selDay.m===view.m&&selDay.d===d;
+  const selBtn={background:"rgba(255,255,255,0.07)",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 8px",fontSize:12,color:C.text,outline:"none",cursor:"pointer"};
+
+  const grid=[];
+  const lead=firstDow(view.y,view.m);
+  for(let i=0;i<lead;i++) grid.push(null);
+  for(let d=1;d<=daysIn(view.y,view.m);d++) grid.push(d);
+
+  return(
+    <div style={{position:"relative"}}>
+      <div style={{position:"relative"}}>
+        <input data-testid={testid} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+          style={{...(inputStyle||iSty),paddingRight:38}} onFocus={fi} onBlur={fo}/>
+        <button type="button" data-testid={testid?testid+"-toggle":undefined} onClick={()=>open?setOpen(false):openPicker()}
+          title="Pick date & time"
+          style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",cursor:"pointer",color:open?C.accent:C.textFaint,display:"flex",alignItems:"center",padding:6}}>
+          <Calendar size={15}/>
+        </button>
+      </div>
+      {open&&(
+        <div data-testid={testid?testid+"-backdrop":undefined} onClick={()=>setOpen(false)}
+          style={{position:"fixed",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",padding:16,
+            background:"rgba(13,27,42,0.25)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)"}}>
+        <div data-testid={testid?testid+"-popover":undefined} className="rfs" onClick={e=>e.stopPropagation()}
+          style={{zIndex:41,width:290,maxWidth:"100%",maxHeight:"min(480px, calc(100vh - 32px))",overflowY:"auto",padding:14,...glass,background:"rgba(13,27,42,0.92)",boxShadow:"0 12px 40px rgba(0,0,0,0.45), 0 0 30px rgba(0,174,239,0.10)"}}>
+          {/* month nav */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <button type="button" onClick={()=>nav(-1)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"3px 9px",cursor:"pointer",fontSize:13}}>‹</button>
+            <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.08em",color:C.text}}>{DTP_MONTHS[view.m]} {view.y}</span>
+            <button type="button" onClick={()=>nav(1)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"3px 9px",cursor:"pointer",fontSize:13}}>›</button>
+          </div>
+          {/* dow header */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+            {["S","M","T","W","T","F","S"].map((d,i)=><span key={i} style={{textAlign:"center",fontFamily:"monospace",fontSize:10,color:C.textFaint}}>{d}</span>)}
+          </div>
+          {/* day grid */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:12}}>
+            {grid.map((d,i)=> d===null
+              ? <span key={i}/>
+              : <button key={i} type="button" onClick={()=>setSelDay({y:view.y,m:view.m,d})}
+                  style={{aspectRatio:"1",border:isSel(d)?`1px solid ${C.accent}`:isToday(d)?`1px solid ${C.accent}55`:"1px solid transparent",
+                    background:isSel(d)?C.accent:"transparent",color:isSel(d)?C.bg:C.text,fontWeight:isSel(d)?700:400,
+                    borderRadius:8,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+                  onMouseEnter={e=>{if(!isSel(d)){e.currentTarget.style.background="rgba(0,174,239,0.12)";}}}
+                  onMouseLeave={e=>{if(!isSel(d)){e.currentTarget.style.background="transparent";}}}>
+                  {d}
+                </button>
+            )}
+          </div>
+          {/* time */}
+          <label style={{display:"block",fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>TIME</label>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
+            <select value={hh} onChange={e=>setHh(+e.target.value)} style={selBtn}>
+              {Array.from({length:12},(_,i)=>i+1).map(h=><option key={h} value={h} style={{background:C.bgPanel}}>{h}</option>)}
+            </select>
+            <span style={{color:C.textFaint}}>:</span>
+            <select value={mm} onChange={e=>setMm(+e.target.value)} style={selBtn}>
+              {[0,5,10,15,20,25,30,35,40,45,50,55].map(m=><option key={m} value={m} style={{background:C.bgPanel}}>{String(m).padStart(2,"0")}</option>)}
+            </select>
+            <div style={{display:"flex",gap:4,marginLeft:4}}>
+              {["AM","PM"].map(p=>(
+                <button key={p} type="button" onClick={()=>setAp(p)} style={{fontFamily:"monospace",fontSize:11,border:`1px solid ${ap===p?C.accent:C.border}`,color:ap===p?C.accent:C.textFaint,background:ap===p?"rgba(0,174,239,0.10)":"transparent",borderRadius:6,padding:"6px 9px",cursor:"pointer"}}>{p}</button>
+              ))}
+            </div>
+            <select data-testid={testid?testid+"-tz":undefined} value={tz} onChange={e=>setTz(e.target.value)} style={{...selBtn,marginLeft:"auto",fontFamily:"monospace",fontSize:11}} title="Timezone">
+              {DTP_TIMEZONES.map(z=><option key={z} value={z} style={{background:C.bgPanel}}>{z}</option>)}
+            </select>
+          </div>
+          {/* actions */}
+          <div style={{display:"flex",gap:8}}>
+            <button type="button" data-testid={testid?testid+"-apply":undefined} onClick={apply} disabled={!selDay}
+              onMouseEnter={e=>{if(selDay)ctaHover(e);}} onMouseLeave={ctaLeave}
+              style={{flex:1,background:C.accent,color:C.bg,fontWeight:700,fontSize:13,border:"none",borderRadius:10,padding:"8px",cursor:selDay?"pointer":"default",opacity:selDay?1:.5,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>Apply</button>
+            <button type="button" onClick={clear} onMouseEnter={secHover} onMouseLeave={secLeave}
+              style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Clear</button>
+          </div>
+        </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -863,7 +983,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
-              <input data-testid="session-date-input" value={date} onChange={e=>setDate(e.target.value)} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+              <div style={{marginTop:5}}><DateTimePicker testid="session-date-input" value={date} onChange={setDate} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST"/></div>
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
@@ -901,7 +1021,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
-                        <input value={editDraft.date} onChange={e=>setEditDraft(d=>({...d,date:e.target.value}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+                        <div style={{marginTop:5}}><DateTimePicker testid="session-edit-date" value={editDraft.date} onChange={v=>setEditDraft(d=>({...d,date:v}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST"/></div>
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
@@ -1255,6 +1375,9 @@ function EmailsTab({me,sessions,allRegs}){
   const [loading,setLoading]=useState(true);
   const [cfgUrl,setCfgUrl]=useState("");
   const [tpl,setTpl]=useState(DEFAULT_TEMPLATES);
+  const [otpOn,setOtpOn]=useState(false);
+  const [otpBusy,setOtpBusy]=useState(false);
+  const [otpErr,setOtpErr]=useState("");
 
   // Confirmation template
   const [cEnabled,setCEnabled]=useState(false);
@@ -1274,7 +1397,7 @@ function EmailsTab({me,sessions,allRegs}){
   const [bMsg,setBMsg]=useState(""); const [bErr,setBErr]=useState("");
 
   useEffect(()=>{(async()=>{
-    const er=await safeGet(EMAIL_CFG_KEY); if(er){ try{ setCfgUrl((JSON.parse(er.value).url)||""); }catch(e){} }
+    const er=await safeGet(EMAIL_CFG_KEY); if(er){ try{ const cfg=JSON.parse(er.value); setCfgUrl(cfg.url||""); setOtpOn(!!cfg.otpRequired); }catch(e){} }
     const tr=await safeGet(EMAIL_TEMPLATES_KEY);
     const t = tr ? {...DEFAULT_TEMPLATES, ...JSON.parse(tr.value)} : DEFAULT_TEMPLATES;
     setTpl(t);
@@ -1291,6 +1414,20 @@ function EmailsTab({me,sessions,allRegs}){
   const allChecked = recips.length>0 && checked.size===recips.length;
   const toggleAll=()=> setChecked(allChecked ? new Set() : new Set(recips.map(r=>r.email)));
   const toggleOne=(email)=> setChecked(prev=>{ const n=new Set(prev); n.has(email)?n.delete(email):n.add(email); return n; });
+
+  const toggleOtp=async()=>{
+    setOtpErr("");
+    const next=!otpOn;
+    if(next && !cfgUrl){ setOtpErr("Configure the Apps Script URL in Settings before enabling OTP verification."); return; }
+    setOtpBusy(true);
+    // Merge with the latest stored config so we never clobber the URL.
+    let url=cfgUrl;
+    try{ const r=await safeGet(EMAIL_CFG_KEY); if(r){ const cfg=JSON.parse(r.value); url=cfg.url||url; } }catch(e){}
+    const ok=await safeSave(EMAIL_CFG_KEY,{ url, otpRequired: next });
+    if(ok){ setOtpOn(next); await logActivity(me?.name,"Updated OTP verification",next?"ON":"OFF"); }
+    else setOtpErr("Couldn't save. Please try again.");
+    setOtpBusy(false);
+  };
 
   const saveConfirmation=async()=>{
     setCBusy(true);setCErr("");setCMsg("");
@@ -1368,6 +1505,29 @@ function EmailsTab({me,sessions,allRegs}){
         </div>
       )}
 
+      {/* ── OTP verification ── */}
+      <div style={sec}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <ShieldCheck size={16} color={C.accent}/>
+          <p style={slbl}>OTP verification</p>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+          <div>
+            <p style={{fontSize:13,fontWeight:600,color:C.text,margin:0}}>Require OTP verification</p>
+            <p style={{fontSize:11,color:C.textFaint,margin:"3px 0 0",lineHeight:1.5}}>
+              {otpOn
+                ? "ON — registrants must verify their email with a 4-digit code before their spot is confirmed."
+                : "OFF — registrants are added instantly without email verification."}
+            </p>
+          </div>
+          <button data-testid="otp-toggle" onClick={toggleOtp} disabled={otpBusy} role="switch" aria-checked={otpOn}
+            style={{position:"relative",width:46,height:26,borderRadius:13,border:"none",cursor:otpBusy?"default":"pointer",flexShrink:0,opacity:otpBusy?.6:1,background:otpOn?C.accent:"rgba(255,255,255,0.18)",transition:"background .2s"}}>
+            <span style={{position:"absolute",top:3,left:otpOn?23:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+          </button>
+        </div>
+        {otpErr&&<p style={{fontSize:12,color:C.error,margin:0}}>{otpErr}</p>}
+      </div>
+
       {/* ── Confirmation email ── */}
       <div style={sec}>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -1403,8 +1563,8 @@ function EmailsTab({me,sessions,allRegs}){
           <button data-testid="email-confirm-save" onClick={saveConfirmation} disabled={cBusy} onMouseEnter={e=>{if(!cBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:cBusy?"default":"pointer",opacity:cBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
             {cBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save confirmation"}
           </button>
-          <div style={{display:"flex",gap:6,alignItems:"center",marginLeft:"auto"}}>
-            <input data-testid="email-confirm-test-input" value={testTo} onChange={e=>{setTestTo(e.target.value);setTestMsg("");}} placeholder="you@example.com" style={{...iSty,width:180,padding:"8px 12px"}} onFocus={fi} onBlur={fo}/>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginLeft:"auto",flexWrap:"wrap",minWidth:0}}>
+            <input data-testid="email-confirm-test-input" value={testTo} onChange={e=>{setTestTo(e.target.value);setTestMsg("");}} placeholder="you@example.com" style={{...iSty,flex:1,minWidth:150,maxWidth:220,padding:"8px 12px"}} onFocus={fi} onBlur={fo}/>
             <button data-testid="email-confirm-test-btn" onClick={sendTest} disabled={testBusy||!cfgUrl} onMouseEnter={e=>{if(!testBusy&&cfgUrl)secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:(testBusy||!cfgUrl)?"default":"pointer",opacity:(testBusy||!cfgUrl)?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
               {testBusy?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test"}
             </button>
@@ -1596,30 +1756,31 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
 
   // Apps Script email config + OTP toggle
   const [asUrl,       setAsUrl]       = useState("");    // Apps Script URL
-  const [otpOn,       setOtpOn]       = useState(false); // require OTP verification
   const [asErr,       setAsErr]       = useState("");
   const [asOk,        setAsOk]        = useState("");
   const [asBusy,      setAsBusy]      = useState(false);
   const [asLoaded,    setAsLoaded]    = useState(false);
   const [asTesting,   setAsTesting]   = useState(false);
+  const [asTestTo,    setAsTestTo]    = useState("");
   const [asTestMsg,   setAsTestMsg]   = useState("");
 
   useEffect(()=>{
     (async()=>{
       const r = await safeGet(EMAIL_CFG_KEY);
-      if(r){ const cfg=JSON.parse(r.value); setAsUrl(cfg.url||""); setOtpOn(!!cfg.otpRequired); }
+      if(r){ const cfg=JSON.parse(r.value); setAsUrl(cfg.url||""); }
       setAsLoaded(true);
     })();
   },[]);
 
   const saveAs = async () => {
     setAsErr(""); setAsOk("");
-    // If OTP is being turned on, a URL is required
-    if(otpOn && !asUrl.trim()){ setAsErr("Add the Apps Script URL before enabling OTP verification."); return; }
     if(asUrl.trim() && !asUrl.includes("script.google.com")){ setAsErr("That doesn't look like an Apps Script URL."); return; }
     setAsBusy(true);
-    const ok = await safeSave(EMAIL_CFG_KEY, { url: asUrl.trim(), otpRequired: otpOn });
-    if(ok){ await logActivity(me?.name,"Updated email/OTP settings",otpOn?"OTP verification ON":"OTP verification OFF"); setAsOk("Settings saved." + (otpOn ? " OTP verification is ON." : " OTP verification is OFF — users can register directly.")); }
+    // Preserve the OTP flag (managed from the Emails tab) — merge, don't clobber.
+    let otpRequired=false;
+    try{ const r=await safeGet(EMAIL_CFG_KEY); if(r) otpRequired=!!JSON.parse(r.value).otpRequired; }catch(e){}
+    const ok = await safeSave(EMAIL_CFG_KEY, { url: asUrl.trim(), otpRequired });
+    if(ok){ await logActivity(me?.name,"Updated Apps Script URL",""); setAsOk("Settings saved."); }
     else setAsErr("Failed to save. Try again.");
     setAsBusy(false);
   };
@@ -1628,12 +1789,13 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
   const testEmail = async () => {
     setAsTestMsg(""); setAsErr("");
     if(!asUrl.trim()){ setAsErr("Enter the Apps Script URL first."); return; }
-    if(!me?.name){ setAsErr("No admin email context available."); return; }
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asTestTo.trim())){ setAsErr("Enter a valid email address to send the test to."); return; }
     setAsTesting(true);
     try {
-      await sendOtpEmail({ url: asUrl.trim() }, "TEST-RECIPIENT", me.name || "Admin", "0000", "Connection Test");
-      await logActivity(me?.name,"Sent test email request","");
-      setAsTestMsg("Test request sent to the Apps Script. Check your Apps Script → Executions log to confirm it ran. Note: the browser can't read the response, so this only confirms the request was dispatched.");
+      const code = gen4DigitOtp();
+      await sendOtpEmail({ url: asUrl.trim() }, asTestTo.trim(), me?.name || "Admin", code, "Connection Test");
+      await logActivity(me?.name,"Sent test email request",asTestTo.trim());
+      setAsTestMsg("Test OTP dispatched to " + asTestTo.trim() + ". Check that inbox (and Spam). Delivery can't be confirmed from the browser — see your Apps Script → Executions log.");
     } catch(e) {
       setAsErr("Could not dispatch the request: " + (e.message || "unknown error"));
     }
@@ -1730,39 +1892,21 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
         </button>
       </div>
 
-      {/* Apps Script email config + OTP toggle */}
+      {/* Apps Script email sender configuration */}
       {canSettings && (
       <div style={sec}>
-        <p style={slbl}>Email / OTP verification (Google Apps Script)</p>
+        <p style={slbl}>Email sender (Google Apps Script)</p>
         <p style={{fontSize:12,color:C.textFaint,lineHeight:1.6,marginBottom:10}}>
-          OTP emails are sent through your own Gmail via a Google Apps Script web app.
-          Deploy the provided <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>otp-sender.gs</span> at&nbsp;
+          All app emails (OTP, confirmation, bulk) are sent through your own Gmail via a Google Apps Script web app.
+          Deploy the provided <span style={{fontFamily:"monospace",fontSize:11,color:C.accent}}>email-sender.gs</span> at&nbsp;
           <a href="https://script.google.com" target="_blank" rel="noreferrer" style={{color:C.accent}}>script.google.com</a>
           &nbsp;(Deploy → Web app → Execute as: Me → Access: Anyone), then paste the <span style={{color:C.text}}>/exec</span> URL below.
+          OTP verification itself is turned on/off in the <span style={{color:C.text}}>Emails</span> tab.
         </p>
         {!asLoaded ? <p style={{fontSize:12,color:C.textFaint}}>Loading...</p> : (
           <>
-            {/* OTP toggle */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,background:"rgba(255,255,255,0.03)",border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",marginBottom:12}}>
-              <div>
-                <p style={{fontSize:13,fontWeight:600,color:C.text,margin:0}}>Require OTP verification</p>
-                <p style={{fontSize:11,color:C.textFaint,margin:"3px 0 0",lineHeight:1.5}}>
-                  {otpOn
-                    ? "ON — registrants must verify their email with a 4-digit code."
-                    : "OFF — registrants are added instantly without email verification."}
-                </p>
-              </div>
-              <button
-                data-testid="otp-toggle"
-                onClick={()=>{setOtpOn(v=>!v);setAsOk("");setAsErr("");}}
-                role="switch" aria-checked={otpOn}
-                style={{position:"relative",width:46,height:26,borderRadius:13,border:"none",cursor:"pointer",flexShrink:0,background:otpOn?C.accent:"rgba(255,255,255,0.18)",transition:"background .2s"}}>
-                <span style={{position:"absolute",top:3,left:otpOn?23:3,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-              </button>
-            </div>
-
             <div>
-              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>APPS SCRIPT WEB APP URL {otpOn && <span style={{color:C.accent}}>*</span>}</label>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>APPS SCRIPT WEB APP URL</label>
               <input
                 data-testid="appsscript-url-input"
                 value={asUrl}
@@ -1779,8 +1923,9 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
               <button data-testid="settings-save-btn" onClick={saveAs} disabled={asBusy} onMouseEnter={e=>{if(!asBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:asBusy?"default":"pointer",opacity:asBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {asBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save settings"}
               </button>
-              <button data-testid="settings-test-btn" onClick={testEmail} disabled={asTesting||!asUrl.trim()} onMouseEnter={e=>{if(!asTesting&&asUrl.trim())secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:asTesting||!asUrl.trim()?"default":"pointer",opacity:asTesting||!asUrl.trim()?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
-                {asTesting?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test request"}
+              <input data-testid="settings-test-input" value={asTestTo} onChange={e=>{setAsTestTo(e.target.value);setAsTestMsg("");setAsErr("");}} placeholder="you@example.com" style={{...iSty,flex:1,minWidth:150,maxWidth:240,padding:"8px 12px",fontSize:12}} onFocus={fi} onBlur={fo}/>
+              <button data-testid="settings-test-btn" onClick={testEmail} disabled={asTesting||!asUrl.trim()||!asTestTo.trim()} onMouseEnter={e=>{if(!asTesting&&asUrl.trim()&&asTestTo.trim())secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:(asTesting||!asUrl.trim()||!asTestTo.trim())?"default":"pointer",opacity:(asTesting||!asUrl.trim()||!asTestTo.trim())?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
+                {asTesting?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test OTP"}
               </button>
             </div>
           </>
