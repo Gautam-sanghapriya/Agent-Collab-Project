@@ -1378,6 +1378,9 @@ function EmailsTab({me,sessions,allRegs}){
   const [otpOn,setOtpOn]=useState(false);
   const [otpBusy,setOtpBusy]=useState(false);
   const [otpErr,setOtpErr]=useState("");
+  const [otpTestTo,setOtpTestTo]=useState("");
+  const [otpTesting,setOtpTesting]=useState(false);
+  const [otpTestMsg,setOtpTestMsg]=useState("");
 
   // Confirmation template
   const [cEnabled,setCEnabled]=useState(false);
@@ -1427,6 +1430,20 @@ function EmailsTab({me,sessions,allRegs}){
     if(ok){ setOtpOn(next); await logActivity(me?.name,"Updated OTP verification",next?"ON":"OFF"); }
     else setOtpErr("Couldn't save. Please try again.");
     setOtpBusy(false);
+  };
+
+  const sendOtpTest=async()=>{
+    setOtpTestMsg("");setOtpErr("");
+    if(!cfgUrl){ setOtpErr("Configure the Apps Script URL in Settings first."); return; }
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(otpTestTo.trim())){ setOtpErr("Enter a valid email address to send the test to."); return; }
+    setOtpTesting(true);
+    try{
+      const code=gen4DigitOtp();
+      await sendOtpEmail({url:cfgUrl}, otpTestTo.trim(), me?.name||"Admin", code, "Connection Test");
+      await logActivity(me?.name,"Sent test OTP",otpTestTo.trim());
+      setOtpTestMsg("Test OTP dispatched to "+otpTestTo.trim()+". Check that inbox (and Spam). Delivery can't be confirmed from the browser — see your Apps Script → Executions log.");
+    }catch(e){ setOtpErr("Could not dispatch the request: "+(e.message||"unknown error")); }
+    setOtpTesting(false);
   };
 
   const saveConfirmation=async()=>{
@@ -1526,6 +1543,13 @@ function EmailsTab({me,sessions,allRegs}){
           </button>
         </div>
         {otpErr&&<p style={{fontSize:12,color:C.error,margin:0}}>{otpErr}</p>}
+        {otpTestMsg&&<p style={{fontSize:12,color:C.textDim,lineHeight:1.5,background:"rgba(0,174,239,0.08)",border:"1px solid rgba(0,174,239,0.2)",borderRadius:8,padding:"8px 12px",margin:0}}>{otpTestMsg}</p>}
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <input data-testid="otp-test-input" value={otpTestTo} onChange={e=>{setOtpTestTo(e.target.value);setOtpTestMsg("");setOtpErr("");}} placeholder="you@example.com" style={{...iSty,flex:1,minWidth:150,maxWidth:240,padding:"8px 12px",fontSize:12}} onFocus={fi} onBlur={fo}/>
+          <button data-testid="otp-test-btn" onClick={sendOtpTest} disabled={otpTesting||!cfgUrl||!otpTestTo.trim()} onMouseEnter={e=>{if(!otpTesting&&cfgUrl&&otpTestTo.trim())secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:(otpTesting||!cfgUrl||!otpTestTo.trim())?"default":"pointer",opacity:(otpTesting||!cfgUrl||!otpTestTo.trim())?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
+            {otpTesting?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test OTP"}
+          </button>
+        </div>
       </div>
 
       {/* ── Confirmation email ── */}
@@ -1760,9 +1784,6 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
   const [asOk,        setAsOk]        = useState("");
   const [asBusy,      setAsBusy]      = useState(false);
   const [asLoaded,    setAsLoaded]    = useState(false);
-  const [asTesting,   setAsTesting]   = useState(false);
-  const [asTestTo,    setAsTestTo]    = useState("");
-  const [asTestMsg,   setAsTestMsg]   = useState("");
 
   useEffect(()=>{
     (async()=>{
@@ -1783,23 +1804,6 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
     if(ok){ await logActivity(me?.name,"Updated Apps Script URL",""); setAsOk("Settings saved."); }
     else setAsErr("Failed to save. Try again.");
     setAsBusy(false);
-  };
-
-  // Fire a real test email through the Apps Script (form-to-iframe POST)
-  const testEmail = async () => {
-    setAsTestMsg(""); setAsErr("");
-    if(!asUrl.trim()){ setAsErr("Enter the Apps Script URL first."); return; }
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(asTestTo.trim())){ setAsErr("Enter a valid email address to send the test to."); return; }
-    setAsTesting(true);
-    try {
-      const code = gen4DigitOtp();
-      await sendOtpEmail({ url: asUrl.trim() }, asTestTo.trim(), me?.name || "Admin", code, "Connection Test");
-      await logActivity(me?.name,"Sent test email request",asTestTo.trim());
-      setAsTestMsg("Test OTP dispatched to " + asTestTo.trim() + ". Check that inbox (and Spam). Delivery can't be confirmed from the browser — see your Apps Script → Executions log.");
-    } catch(e) {
-      setAsErr("Could not dispatch the request: " + (e.message || "unknown error"));
-    }
-    setAsTesting(false);
   };
 
   const save=async(next)=>{const ok=await safeSave(ADMIN_KEY,next);if(ok)setAdmins(next);return ok;};
@@ -1910,7 +1914,7 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
               <input
                 data-testid="appsscript-url-input"
                 value={asUrl}
-                onChange={e=>{setAsUrl(e.target.value);setAsErr("");setAsOk("");setAsTestMsg("");}}
+                onChange={e=>{setAsUrl(e.target.value);setAsErr("");setAsOk("");}}
                 placeholder="https://script.google.com/macros/s/.../exec"
                 style={{...iSty,marginTop:5,fontSize:12}}
                 onFocus={fi} onBlur={fo}
@@ -1918,14 +1922,9 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
             </div>
             {asErr&&<p style={{fontSize:12,color:C.error}}>{asErr}</p>}
             {asOk&&<p style={{fontSize:12,color:C.success}}>{asOk}</p>}
-            {asTestMsg&&<p style={{fontSize:12,color:C.textDim,lineHeight:1.5,background:"rgba(0,174,239,0.08)",border:"1px solid rgba(0,174,239,0.2)",borderRadius:8,padding:"8px 12px"}}>{asTestMsg}</p>}
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <button data-testid="settings-save-btn" onClick={saveAs} disabled={asBusy} onMouseEnter={e=>{if(!asBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:asBusy?"default":"pointer",opacity:asBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {asBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save settings"}
-              </button>
-              <input data-testid="settings-test-input" value={asTestTo} onChange={e=>{setAsTestTo(e.target.value);setAsTestMsg("");setAsErr("");}} placeholder="you@example.com" style={{...iSty,flex:1,minWidth:150,maxWidth:240,padding:"8px 12px",fontSize:12}} onFocus={fi} onBlur={fo}/>
-              <button data-testid="settings-test-btn" onClick={testEmail} disabled={asTesting||!asUrl.trim()||!asTestTo.trim()} onMouseEnter={e=>{if(!asTesting&&asUrl.trim()&&asTestTo.trim())secHover(e);}} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,fontWeight:600,fontSize:13,border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 14px",cursor:(asTesting||!asUrl.trim()||!asTestTo.trim())?"default":"pointer",opacity:(asTesting||!asUrl.trim()||!asTestTo.trim())?.5:1,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
-                {asTesting?<><Loader2 size={13} className="animate-spin"/>Sending...</>:"Send test OTP"}
               </button>
             </div>
           </>
