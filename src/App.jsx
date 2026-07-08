@@ -153,7 +153,7 @@ export default function App(){
 @media (min-width:860px){
 .reg-card.has-poster{flex-direction:row;align-items:stretch}
 .reg-card.has-poster .reg-poster{width:56%;flex-shrink:0;overflow:hidden;background:${C.bgPanel};display:flex;align-items:center;justify-content:center;}
-.reg-card.has-poster .reg-poster img{width:100%;height:100%;object-fit:contain}
+.reg-card.has-poster .reg-poster img{width:100%;height:auto;object-fit:contain}
 .reg-card.has-poster .reg-poster::after{background:linear-gradient(to right, rgba(13,27,42,0) 62%, rgba(13,27,42,0.68) 100%)}
 .reg-card.has-poster .reg-form{width:44%;display:flex;flex-direction:column;justify-content:center;padding:48px 42px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
 }
@@ -363,10 +363,18 @@ function RegisterView(){
   const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
 
   // Step 1 — form
-  const [name,      setName]      = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName,  setLastName]  = useState("");
+  const [role,      setRole]      = useState("");
   const [email,     setEmail]     = useState("");
-  const [nameErr,   setNameErr]   = useState("");
+  const [firstErr,  setFirstErr]  = useState("");
+  const [lastErr,   setLastErr]   = useState("");
+  const [roleErr,   setRoleErr]   = useState("");
   const [emailErr,  setEmailErr]  = useState("");
+
+  // Combined display name — kept so emails, the admin table and CSV export
+  // (which all read `name`) keep working unchanged.
+  const fullName = () => `${firstName.trim()} ${lastName.trim()}`.trim();
 
   // Step 2 — OTP
   const [step,      setStep]      = useState("form"); // form | otp | success
@@ -409,7 +417,9 @@ function RegisterView(){
 
   const validateForm = () => {
     let ok = true;
-    if(!name.trim()){ setNameErr("Required"); ok=false; } else setNameErr("");
+    if(!firstName.trim()){ setFirstErr("Required"); ok=false; } else setFirstErr("");
+    if(!lastName.trim()){ setLastErr("Required"); ok=false; } else setLastErr("");
+    if(!role.trim()){ setRoleErr("Required"); ok=false; } else setRoleErr("");
     if(!email.trim()){ setEmailErr("Required"); ok=false; }
     else if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())){ setEmailErr("Enter a valid email"); ok=false; }
     else setEmailErr("");
@@ -426,18 +436,19 @@ function RegisterView(){
       setSendErr("This email is already registered for this session.");
       return false;
     }
-    list.push({ name: name.trim(), email: norm, registeredAt: new Date().toISOString(), verified: !!verified });
+    const nm = fullName();
+    list.push({ name: nm, firstName: firstName.trim(), lastName: lastName.trim(), role: role.trim(), email: norm, registeredAt: new Date().toISOString(), verified: !!verified });
     const ok = await safeSave(key, list);
     if(!ok){ setSendErr("Something went wrong. Please try again."); return false; }
     // Confirmation email (best effort — never blocks or fails the registration).
     try{
       const conf = templates && templates.confirmation;
       if(conf && conf.enabled && emailCfg && emailCfg.url){
-        const vars = { name:name.trim(), email:norm, session_title:sess.title, session_date:sess.date||"" };
+        const vars = { name:nm, email:norm, session_title:sess.title, session_date:sess.date||"" };
         const subject = renderTemplate(conf.subject, vars);
         const inner = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
         const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"" });
-        postToAppsScript(emailCfg, { type:"confirmation", to_email:norm, to_name:name.trim(), subject, html }).catch(()=>{});
+        postToAppsScript(emailCfg, { type:"confirmation", to_email:norm, to_name:nm, subject, html }).catch(()=>{});
       }
     }catch(e){ /* ignore — registration already saved */ }
     return true;
@@ -471,7 +482,7 @@ function RegisterView(){
     }
     const code = gen4DigitOtp();
     try {
-      await sendOtpEmail(emailCfg, email.trim(), name.trim(), code, sess.title);
+      await sendOtpEmail(emailCfg, email.trim(), fullName(), code, sess.title);
       setOtp(code);
       setOtpSentAt(Date.now());
       setOtpInput(""); setOtpErr(""); setAttempts(0);
@@ -506,7 +517,7 @@ function RegisterView(){
     setSending(true); setSendErr("");
     const code = gen4DigitOtp();
     try {
-      await sendOtpEmail(emailCfg, email.trim(), name.trim(), code, sess.title);
+      await sendOtpEmail(emailCfg, email.trim(), fullName(), code, sess.title);
       setOtp(code); setOtpSentAt(Date.now());
       setOtpInput(""); setOtpErr(""); setAttempts(0);
       setTimeLeft(300); setCooldown(60);
@@ -574,8 +585,8 @@ function RegisterView(){
       {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:16}}>{sess.date}</p>}
       <p style={{fontSize:13,color:C.textDim}}>Your email <span style={{color:C.text}}>{email}</span> has been verified and your spot is confirmed.</p>
       <div style={{display:"flex",gap:10,justifyContent:"center",marginTop:20,flexWrap:"wrap"}}>
-        <button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");}} style={{fontFamily:"monospace",fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
-        {sessions.length>1&&<button onClick={()=>{setName("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
+        <button onClick={()=>{setFirstName("");setLastName("");setRole("");setEmail("");setOtpInput("");setStep("form");}} style={{fontFamily:"monospace",fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
+        {sessions.length>1&&<button onClick={()=>{setFirstName("");setLastName("");setRole("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
       </div>
     </div>
   );
@@ -653,9 +664,21 @@ function RegisterView(){
       {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.6,marginBottom:22}}>{sess.description}</p>}
       <div style={{height:1,background:"linear-gradient(to right, rgba(0,174,239,0.18), rgba(255,255,255,0))",marginBottom:22}}/>
       <div onKeyDown={e=>{if(e.key==="Enter"&&!sending) handleRegister();}}>
-        {lbl("FULL NAME")}
-        <input data-testid="register-name-input" type="text" value={name} onChange={e=>{setName(e.target.value);setNameErr("");}} placeholder="Ada Lovelace" style={inpStyle(nameErr)} onFocus={fi} onBlur={fo}/>
-        {nameErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{nameErr}</p>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div>
+            {lbl("FIRST NAME")}
+            <input data-testid="register-firstname-input" type="text" value={firstName} onChange={e=>{setFirstName(e.target.value);setFirstErr("");}} placeholder="Ada" style={inpStyle(firstErr)} onFocus={fi} onBlur={fo}/>
+            {firstErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{firstErr}</p>}
+          </div>
+          <div>
+            {lbl("LAST NAME")}
+            <input data-testid="register-lastname-input" type="text" value={lastName} onChange={e=>{setLastName(e.target.value);setLastErr("");}} placeholder="Lovelace" style={inpStyle(lastErr)} onFocus={fi} onBlur={fo}/>
+            {lastErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{lastErr}</p>}
+          </div>
+        </div>
+        {lbl("ROLE")}
+        <input data-testid="register-role-input" type="text" value={role} onChange={e=>{setRole(e.target.value);setRoleErr("");}} placeholder="Scrum Master" style={inpStyle(roleErr)} onFocus={fi} onBlur={fo}/>
+        {roleErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{roleErr}</p>}
         {lbl("EMAIL ADDRESS")}
         <input data-testid="register-email-input" type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailErr("");}} placeholder="ada@company.com" style={inpStyle(emailErr)} onFocus={fi} onBlur={fo}/>
         {emailErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{emailErr}</p>}
@@ -1278,8 +1301,8 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
 
   const exportCsv=()=>{
     logActivity(me?.name,"Exported registrations",`${selSid} (${display.length} rows)`);
-    const hdr=["Name","Email","Registered At","Status"];
-    const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.email,fmt(r.registeredAt),st.label];});
+    const hdr=["Name","First Name","Last Name","Role","Email","Registered At","Status"];
+    const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.firstName||"",r.lastName||"",r.role||"",r.email,fmt(r.registeredAt),st.label];});
     const csv = [hdr,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
