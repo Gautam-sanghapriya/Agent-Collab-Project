@@ -340,7 +340,9 @@ function buildBrandedEmail(opts){
   var eyebrow = o.eyebrow || "Shri Tech Partners";
   var sessionTitle = o.sessionTitle || "";
   var sessionDate = o.sessionDate || "";
-  var banner = o.banner || "";
+  // NOTE: banners are intentionally NOT embedded in emails. A data-URL banner
+  // exceeds the message size limit and would not render in Gmail/Outlook anyway.
+  // The banner still shows on the in-app registration page.
   // Session detail — simple frost-glass panel (fonts kept; no cyan accent).
   var sessionCard = sessionTitle ? (
     '<tr><td style="padding:22px 26px 0 26px;">' +
@@ -351,12 +353,6 @@ function buildBrandedEmail(opts){
           (sessionDate ? '<p style="margin:5px 0 0 0;font-size:13px;color:rgba(255,255,255,0.65);">' + sessionDate + '</p>' : '') +
         '</td></tr>' +
       '</table>' +
-    '</td></tr>'
-  ) : '';
-  // Banner image — shown full-width (never cropped) below the session detail.
-  var bannerRow = banner ? (
-    '<tr><td style="padding:22px 26px 0 26px;">' +
-      '<img src="' + banner + '" alt="' + sessionTitle + '" width="100%" style="display:block;width:100%;height:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.12);" />' +
     '</td></tr>'
   ) : '';
   return '' +
@@ -373,7 +369,6 @@ function buildBrandedEmail(opts){
     // body
     '<tr><td style="padding:16px 26px 0 26px;font-size:14px;color:rgba(255,255,255,0.82);line-height:1.7;">' + bodyHtml + '</td></tr>' +
     sessionCard +
-    bannerRow +
     // footer
     '<tr><td style="padding:24px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid rgba(0,174,239,0.15);padding-top:16px;"><p style="margin:0;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">You are receiving this because you registered with Shri Tech Partners.</p></td></tr></table></td></tr>' +
     '<tr><td style="padding:16px 26px 24px 26px;"><p style="margin:0;font-family:monospace;font-size:10px;color:rgba(255,255,255,0.40);text-align:center;letter-spacing:0.5px;">Registrations are stored securely and never shared with third parties.</p></td></tr>' +
@@ -489,7 +484,7 @@ function RegisterView(){
         const vars = { name:nm, email:norm, session_title:sess.title, session_date:sess.date||"" };
         const subject = renderTemplate(conf.subject, vars);
         const inner = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
-        const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"", banner:sess.banner||"" });
+        const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"" });
         postToAppsScript(emailCfg, { type:"confirmation", to_email:norm, to_name:nm, subject, html }).catch(()=>{});
       }
     }catch(e){ /* ignore — registration already saved */ }
@@ -1662,7 +1657,7 @@ function EmailsTab({me,sessions,allRegs}){
     const vars={ name:"Test User", email:testTo.trim(), session_title:"Sample Session", session_date:"1 Jan 2026 · 10:00 AM" };
     const subject=renderTemplate(cSubject,vars);
     const inner=renderTemplate(cBody,vars).replace(/\n/g,"<br>");
-    const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Registration confirmed",sessionTitle:vars.session_title,sessionDate:vars.session_date,banner:(sessions[0]||{}).banner||""});
+    const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Registration confirmed",sessionTitle:vars.session_title,sessionDate:vars.session_date});
     try{ await postToAppsScript({url:cfgUrl},{type:"confirmation",to_email:testTo.trim(),to_name:"Test User",subject,html}); await logActivity(me?.name,"Sent confirmation test email",testTo.trim());
       setTestMsg("Test dispatched to "+testTo.trim()+". Delivery can't be confirmed from the browser — check your Apps Script executions.");
     }catch(e){ setCErr("Could not dispatch the test."); }
@@ -1684,7 +1679,7 @@ function EmailsTab({me,sessions,allRegs}){
       const vars={ name:r.name, email:r.email, session_title:(sess&&sess.title)||"", session_date:(sess&&sess.date)||"" };
       const subject=renderTemplate(bSubject,vars);
       const inner=renderTemplate(bBody,vars).replace(/\n/g,"<br>");
-      const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date,banner:(sess&&sess.banner)||""});
+      const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date});
       try{ await postToAppsScript({url:cfgUrl},{type:"bulk",to_email:r.email,to_name:r.name,subject,html}); }catch(e){}
       setProgress({done:i+1,total:targets.length});
       await new Promise(res=>setTimeout(res,250)); // gentle pacing for Apps Script quotas
@@ -1707,10 +1702,10 @@ function EmailsTab({me,sessions,allRegs}){
   // Live previews (sample data filled into placeholders, wrapped in brand shell)
   const sampleSess = sessions[0] || {};
   const confVars = { name:"Ada Lovelace", email:"ada@example.com", session_title:sampleSess.title||"AI Basics for Teams", session_date:sampleSess.date||"15 Aug 2026 · 3:00 PM IST" };
-  const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date, banner:sampleSess.banner||"" });
+  const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date });
   const bulkSess = sessions.find(s=>s.id===bSid) || {};
   const bulkVars = { name:(recips[0]&&recips[0].name)||"Ada Lovelace", email:(recips[0]&&recips[0].email)||"ada@example.com", session_title:bulkSess.title||"", session_date:bulkSess.date||"" };
-  const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date, banner:bulkSess.banner||"" });
+  const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date });
   const previewLabel = (t)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>{t}</label><span style={{fontSize:10,color:C.textFaint}}>sample data</span></div>);
 
   return(
