@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Check, AlertCircle, Loader2, Download, Users, ClipboardList,
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
-  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send
+  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send, Image as ImageIcon, UploadCloud
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./utils/supabase";
 
@@ -141,7 +141,7 @@ export default function App(){
   const [view,setView]=useState("register");
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
-      <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
+      <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}.reg-card{display:flex;flex-direction:column}.reg-poster img{display:block;width:100%;height:auto}.reg-form{padding:28px 24px;width:100%}@media (min-width:860px){.reg-card.has-poster{flex-direction:row;align-items:stretch}.reg-card.has-poster .reg-poster{width:54%;flex-shrink:0;overflow:hidden}.reg-card.has-poster .reg-poster img{height:100%;object-fit:cover}.reg-card.has-poster .reg-form{width:46%;display:flex;flex-direction:column;justify-content:center;padding:40px 36px}}.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
       <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:C.accentHover,opacity:.14,filter:"blur(100px)",pointerEvents:"none"}}/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
@@ -305,7 +305,8 @@ function buildBrandedEmail(opts){
   return '' +
   '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>' +
   '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>' +
-  '<meta name="color-scheme" content="dark"/></head>' +
+  '<meta name="color-scheme" content="dark"/>' +
+  '<style>html{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}</style></head>' +
   '<body style="margin:0;padding:0;background-color:#1b3a5c;">' +
   '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#1b3a5c" style="background-color:#1b3a5c;background-image:radial-gradient(circle at 12% -5%, rgba(0,174,239,0.30), rgba(0,174,239,0) 42%), radial-gradient(circle at 92% 108%, rgba(0,174,239,0.22), rgba(0,174,239,0) 48%);padding:40px 16px;">' +
   '<tr><td align="center">' +
@@ -529,6 +530,7 @@ function RegisterView(){
             style={{...glass,borderRadius:12,padding:"16px 20px",cursor:"pointer",textAlign:"left",width:"100%",transition:"border-color .2s",minHeight:84,boxSizing:"border-box"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
             onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(0,174,239,0.1)"}>
+            {s.banner&&<img src={s.banner} alt="" style={{display:"block",width:"100%",height:96,objectFit:"cover",borderRadius:10,border:`1px solid ${C.border}`,marginBottom:12}}/>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1,minWidth:0}}>
                 <p style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,margin:"0 0 5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</p>
@@ -613,14 +615,22 @@ function RegisterView(){
     </div>
   );
 
-  // ── Step 1: Registration form ─────────────────────────────────────────────
+  // ── Step 1: Registration form (with optional side poster) ─────────────────
+  const hasPoster = !!sess.banner;
   return(
-    <div className="rpad" style={{width:"100%",maxWidth:440,padding:36,...glass,marginTop:20}}>
+    <div style={{width:"100%",maxWidth: hasPoster?940:440, marginTop:20}}>
       {sessions.length>1&&(
-        <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:16,padding:0,display:"flex",alignItems:"center",gap:4}}>
+        <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:12,padding:0,display:"flex",alignItems:"center",gap:4}}>
           ← All sessions
         </button>
       )}
+      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,overflow:"hidden",borderRadius:16}}>
+        {hasPoster&&(
+          <div className="reg-poster">
+            <img src={sess.banner} alt={sess.title}/>
+          </div>
+        )}
+        <div className="reg-form">
       <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Registration · {sess.id}</p>
       <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,marginBottom:4}}>{sess.title}</h1>
       {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:4}}>{sess.date}</p>}
@@ -647,6 +657,8 @@ function RegisterView(){
             ? "A 4-digit code will be sent to your email to verify your registration."
             : "Your details will be recorded for this session."}
         </p>
+      </div>
+        </div>
       </div>
     </div>
   );
@@ -891,6 +903,62 @@ function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
   );
 }
 
+// ── BannerUpload — themed image uploader for a session banner ───────────────
+// Stores the image as a data-URL string so it travels with the session record
+// through the app's existing storage (Supabase/localStorage/in-memory) unchanged.
+const BANNER_MAX_BYTES = 2.5 * 1024 * 1024; // 2.5 MB
+function BannerUpload({value,onChange,testid}){
+  const [err,setErr]=useState("");
+  const [drag,setDrag]=useState(false);
+  const inputRef = React.useRef(null);
+
+  const handleFile=(file)=>{
+    setErr("");
+    if(!file) return;
+    if(!/^image\//.test(file.type)){ setErr("Please choose an image file."); return; }
+    if(file.size>BANNER_MAX_BYTES){ setErr("Image is too large (max 2.5 MB). Try a smaller/compressed one."); return; }
+    const reader=new FileReader();
+    reader.onload=()=>onChange(String(reader.result||""));
+    reader.onerror=()=>setErr("Couldn't read that file. Please try again.");
+    reader.readAsDataURL(file);
+  };
+
+  return(
+    <div>
+      <input ref={inputRef} data-testid={testid?testid+"-file":undefined} type="file" accept="image/*"
+        onChange={e=>{handleFile(e.target.files&&e.target.files[0]); e.target.value="";}}
+        style={{display:"none"}}/>
+      {value ? (
+        <div style={{position:"relative",marginTop:5,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+          <img src={value} alt="Session banner" style={{display:"block",width:"100%",maxHeight:150,objectFit:"cover"}}/>
+          <div style={{position:"absolute",top:8,right:8,display:"flex",gap:6}}>
+            <button type="button" data-testid={testid?testid+"-replace":undefined} onClick={()=>inputRef.current&&inputRef.current.click()}
+              style={{background:"rgba(13,27,42,0.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontFamily:"monospace",display:"flex",alignItems:"center",gap:5}}>
+              <UploadCloud size={12}/>Replace
+            </button>
+            <button type="button" data-testid={testid?testid+"-remove":undefined} onClick={()=>{onChange("");setErr("");}}
+              style={{background:"rgba(13,27,42,0.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.error}66`,color:C.error,borderRadius:8,padding:"5px 7px",cursor:"pointer",display:"flex",alignItems:"center"}} title="Remove banner">
+              <X size={13}/>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" data-testid={testid} onClick={()=>inputRef.current&&inputRef.current.click()}
+          onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+          onDrop={e=>{e.preventDefault();setDrag(false);handleFile(e.dataTransfer.files&&e.dataTransfer.files[0]);}}
+          style={{marginTop:5,width:"100%",background:drag?"rgba(0,174,239,0.06)":"rgba(255,255,255,0.03)",border:`1px dashed ${drag?C.accent:"rgba(0,174,239,0.28)"}`,borderRadius:12,padding:"20px 16px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,transition:"all 200ms cubic-bezier(0.4,0,0.2,1)",color:C.textFaint}}>
+          <div style={{width:38,height:38,borderRadius:"50%",background:"rgba(0,174,239,0.10)",border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",color:C.accent}}>
+            <ImageIcon size={18}/>
+          </div>
+          <span style={{fontSize:13,color:C.textDim}}>Click or drop an image to upload a session poster</span>
+          <span style={{fontSize:11,color:C.textFaint}}>Shown beside the form · PNG, JPG or WEBP · up to 2.5 MB</span>
+        </button>
+      )}
+      {err&&<p style={{fontSize:12,color:C.error,margin:"6px 0 0"}}>{err}</p>}
+    </div>
+  );
+}
+
 function StatCard({label,value,small}){
   return(
     <div style={{...glass,padding:"16px 20px"}}>
@@ -902,7 +970,7 @@ function StatCard({label,value,small}){
 
 function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
   const [showForm,setShowForm]=useState(false);
-  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState("");
+  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState(""); const [banner,setBanner]=useState("");
   const [fErr,setFErr]=useState(""); const [busy,setBusy]=useState(false);
   const [confDel,setConfDel]=useState(null);
   const [editSid,setEditSid]=useState(null);    // session being edited
@@ -913,17 +981,17 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
   const create=async()=>{
     if(!title.trim()){setFErr("Session title is required.");return;}
     setBusy(true);setFErr("");
-    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),active:true,createdAt:new Date().toISOString()};
+    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),banner:banner||"",active:true,createdAt:new Date().toISOString()};
     const next=[...sessions,s];
     const ok=await safeSave(SESSIONS_KEY,next);
-    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setShowForm(false);}
+    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setBanner("");setShowForm(false);}
     else setFErr("Failed to save.");
     setBusy(false);
   };
 
   const startEdit=(s)=>{
     setEditSid(s.id);
-    setEditDraft({title:s.title,date:s.date||"",description:s.description||""});
+    setEditDraft({title:s.title,date:s.date||"",description:s.description||"",banner:s.banner||""});
     setEditErr("");
     setConfDel(null);
   };
@@ -932,7 +1000,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
   const saveEdit=async()=>{
     if(!editDraft.title?.trim()){setEditErr("Title is required.");return;}
     setEditBusy(true);setEditErr("");
-    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim()}:s);
+    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim(),banner:editDraft.banner||""}:s);
     const ok=await safeSave(SESSIONS_KEY,next);
     if(ok){await logActivity(me?.name,"Edited session",`${editDraft.title.trim()} [${editSid}]`);setSessions(next);cancelEdit();}
     else setEditErr("Failed to save. Try again.");
@@ -987,7 +1055,11 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
-              <textarea data-testid="session-desc-input" value={desc} onChange={e=>setDesc(e.target.value)} rows={2} placeholder="Short description shown on the registration form..." style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+              <textarea className="rfs" data-testid="session-desc-input" value={desc} onChange={e=>setDesc(e.target.value)} rows={2} placeholder="Short description shown on the registration form..." style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+            </div>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BANNER IMAGE</label>
+              <BannerUpload testid="session-banner" value={banner} onChange={setBanner}/>
             </div>
             {fErr&&<p style={{fontSize:12,color:C.error}}>{fErr}</p>}
             <div style={{display:"flex",gap:8}}>
@@ -1025,7 +1097,11 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
-                        <textarea value={editDraft.description} onChange={e=>setEditDraft(d=>({...d,description:e.target.value}))} rows={2} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+                        <textarea className="rfs" value={editDraft.description} onChange={e=>setEditDraft(d=>({...d,description:e.target.value}))} rows={2} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+                      </div>
+                      <div>
+                        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BANNER IMAGE</label>
+                        <BannerUpload testid="session-edit-banner" value={editDraft.banner} onChange={v=>setEditDraft(d=>({...d,banner:v}))}/>
                       </div>
                       {editErr&&<p style={{fontSize:12,color:C.error}}>{editErr}</p>}
                       <div style={{display:"flex",gap:8}}>
@@ -1577,7 +1653,7 @@ function EmailsTab({me,sessions,allRegs}){
         </div>
         <div>
           <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BODY</label>
-          <textarea data-testid="email-confirm-body" value={cBody} onChange={e=>{setCBody(e.target.value);setCMsg("");}} rows={7} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}} onFocus={fi} onBlur={fo}/>
+          <textarea className="rfs" data-testid="email-confirm-body" value={cBody} onChange={e=>{setCBody(e.target.value);setCMsg("");}} rows={7} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}} onFocus={fi} onBlur={fo}/>
         </div>
         {hint}
         {cErr&&<p style={{fontSize:12,color:C.error,margin:0}}>{cErr}</p>}
@@ -1644,7 +1720,7 @@ function EmailsTab({me,sessions,allRegs}){
         </div>
         <div>
           <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BODY</label>
-          <textarea data-testid="bulk-body" value={bBody} onChange={e=>{setBBody(e.target.value);setBMsg("");}} rows={7} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}} onFocus={fi} onBlur={fo}/>
+          <textarea className="rfs" data-testid="bulk-body" value={bBody} onChange={e=>{setBBody(e.target.value);setBMsg("");}} rows={7} style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit",lineHeight:1.5}} onFocus={fi} onBlur={fo}/>
         </div>
         {hint}
         {bErr&&<p style={{fontSize:12,color:C.error,margin:0}}>{bErr}</p>}
