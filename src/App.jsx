@@ -141,7 +141,23 @@ export default function App(){
   const [view,setView]=useState("register");
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
-      <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}.reg-card{display:flex;flex-direction:column}.reg-poster img{display:block;width:100%;height:auto}.reg-form{padding:28px 24px;width:100%}@media (min-width:860px){.reg-card.has-poster{flex-direction:row;align-items:stretch}.reg-card.has-poster .reg-poster{width:54%;flex-shrink:0;overflow:hidden}.reg-card.has-poster .reg-poster img{height:100%;object-fit:cover}.reg-card.has-poster .reg-form{width:46%;display:flex;flex-direction:column;justify-content:center;padding:40px 36px}}.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
+      <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}
+.reg-card{display:flex;flex-direction:column;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.35),0 0 0 1px rgba(0,174,239,0.05);}
+.reg-poster{position:relative;overflow:hidden;}
+.reg-poster img{display:block;width:100%;height:auto;transition:transform 700ms cubic-bezier(0.4,0,0.2,1);}
+.reg-poster::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom, rgba(13,27,42,0) 58%, rgba(13,27,42,0.60) 100%);pointer-events:none;}
+.reg-card:hover .reg-poster img{transform:scale(1.03);}
+.reg-form{padding:30px 26px;width:100%;position:relative;}
+.reg-eyebrow{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+.reg-eyebrow::before{content:"";display:block;width:20px;height:2px;background:${C.accent};border-radius:2px;flex-shrink:0;}
+@media (min-width:860px){
+.reg-card.has-poster{flex-direction:row;align-items:stretch}
+.reg-card.has-poster .reg-poster{width:56%;flex-shrink:0;overflow:hidden;background:${C.bgPanel};display:flex;align-items:center;justify-content:center;}
+.reg-card.has-poster .reg-poster img{width:100%;height:100%;object-fit:contain}
+.reg-card.has-poster .reg-poster::after{background:linear-gradient(to right, rgba(13,27,42,0) 62%, rgba(13,27,42,0.68) 100%)}
+.reg-card.has-poster .reg-form{width:44%;display:flex;flex-direction:column;justify-content:center;padding:48px 42px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
+}
+.rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
       <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",bottom:"-15%",right:"-10%",width:480,height:480,borderRadius:"50%",background:C.accentHover,opacity:.14,filter:"blur(100px)",pointerEvents:"none"}}/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",minHeight:"100vh"}}>
@@ -618,23 +634,24 @@ function RegisterView(){
   // ── Step 1: Registration form (with optional side poster) ─────────────────
   const hasPoster = !!sess.banner;
   return(
-    <div style={{width:"100%",maxWidth: hasPoster?940:440, marginTop:20}}>
+    <div style={{width:"100%",maxWidth: hasPoster?980:440, marginTop:20}}>
       {sessions.length>1&&(
         <button onClick={()=>setSess(null)} style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",marginBottom:12,padding:0,display:"flex",alignItems:"center",gap:4}}>
           ← All sessions
         </button>
       )}
-      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,overflow:"hidden",borderRadius:16}}>
+      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,borderRadius:20}}>
         {hasPoster&&(
           <div className="reg-poster">
             <img src={sess.banner} alt={sess.title} style={{objectPosition:`${(sess.bannerPos&&sess.bannerPos.x)??50}% ${(sess.bannerPos&&sess.bannerPos.y)??50}%`}}/>
           </div>
         )}
         <div className="reg-form">
-      <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Registration · {sess.id}</p>
-      <h1 style={{fontSize:22,fontWeight:700,lineHeight:1.3,marginBottom:4}}>{sess.title}</h1>
-      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:4}}>{sess.date}</p>}
-      {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.5,marginBottom:20}}>{sess.description}</p>}
+      <p className="reg-eyebrow" style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Registration · {sess.id}</p>
+      <h1 style={{fontSize:24,fontWeight:700,lineHeight:1.32,letterSpacing:"-0.01em",marginBottom:6}}>{sess.title}</h1>
+      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:sess.description?10:4}}>{sess.date}</p>}
+      {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.6,marginBottom:22}}>{sess.description}</p>}
+      <div style={{height:1,background:"linear-gradient(to right, rgba(0,174,239,0.18), rgba(255,255,255,0))",marginBottom:22}}/>
       <div onKeyDown={e=>{if(e.key==="Enter"&&!sending) handleRegister();}}>
         {lbl("FULL NAME")}
         <input data-testid="register-name-input" type="text" value={name} onChange={e=>{setName(e.target.value);setNameErr("");}} placeholder="Ada Lovelace" style={inpStyle(nameErr)} onFocus={fi} onBlur={fo}/>
