@@ -279,11 +279,47 @@ function gen4DigitOtp() {
 // this reliably triggers the send even though we can't confirm delivery.
 async function postToAppsScript(cfg, payload){
   if(!cfg || !cfg.url) throw new Error("Apps Script URL not set. Add it in Admin → Settings.");
-  const body = new URLSearchParams(payload);
-  try{
-    await fetch(cfg.url, { method:"POST", mode:"no-cors", body });
-  }catch(e){ /* opaque response / network — best effort, ignore */ }
-  return true;
+  // Native form POST into a hidden iframe. Unlike fetch(no-cors), this is a
+  // real browser navigation, so it is not subject to CORS and reliably runs
+  // the Apps Script doPost (which reads e.parameter). It also carries a full
+  // HTML body of any size, and the iframe absorbs Apps Script's 302 redirect.
+  // We can't read the response, so an iframe load (or timeout) = "dispatched".
+  return new Promise((resolve)=>{
+    try{
+      if(typeof document==="undefined"){ resolve(true); return; }
+      const frameName = "aiready_post_"+Date.now()+"_"+Math.random().toString(36).slice(2);
+      const iframe = document.createElement("iframe");
+      iframe.name = frameName;
+      iframe.style.display = "none";
+      document.body.appendChild(iframe);
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = cfg.url;
+      form.target = frameName;
+      form.acceptCharset = "UTF-8";
+      form.style.display = "none";
+      Object.keys(payload||{}).forEach((k)=>{
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = k;
+        input.value = payload[k]==null ? "" : String(payload[k]);
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+
+      let done=false;
+      const cleanup=()=>{
+        if(done) return; done=true;
+        try{ form.remove(); }catch(e){}
+        setTimeout(()=>{ try{ iframe.remove(); }catch(e){} }, 1500);
+        resolve(true);
+      };
+      iframe.onload = cleanup;      // fires once Apps Script has responded
+      setTimeout(cleanup, 8000);    // fallback: proceed regardless
+      form.submit();
+    }catch(err){ resolve(true); }   // best-effort; never block the caller
+  });
 }
 
 // Replace {{name}}, {{email}}, {{session_title}}, {{session_date}} etc.
