@@ -665,20 +665,20 @@ function RegisterView(){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div>
             {lbl("FIRST NAME")}
-            <input data-testid="register-firstname-input" type="text" value={firstName} onChange={e=>{setFirstName(e.target.value);setFirstErr("");}} placeholder="Ada" style={inpStyle(firstErr)} onFocus={fi} onBlur={fo}/>
+            <input data-testid="register-firstname-input" type="text" value={firstName} onChange={e=>{setFirstName(e.target.value);setFirstErr("");}} placeholder="First Name" style={inpStyle(firstErr)} onFocus={fi} onBlur={fo}/>
             {firstErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{firstErr}</p>}
           </div>
           <div>
             {lbl("LAST NAME")}
-            <input data-testid="register-lastname-input" type="text" value={lastName} onChange={e=>{setLastName(e.target.value);setLastErr("");}} placeholder="Lovelace" style={inpStyle(lastErr)} onFocus={fi} onBlur={fo}/>
+            <input data-testid="register-lastname-input" type="text" value={lastName} onChange={e=>{setLastName(e.target.value);setLastErr("");}} placeholder="Last Name" style={inpStyle(lastErr)} onFocus={fi} onBlur={fo}/>
             {lastErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{lastErr}</p>}
           </div>
         </div>
         {lbl("ROLE")}
-        <input data-testid="register-role-input" type="text" value={role} onChange={e=>{setRole(e.target.value);setRoleErr("");}} placeholder="Scrum Master" style={inpStyle(roleErr)} onFocus={fi} onBlur={fo}/>
+        <input data-testid="register-role-input" type="text" value={role} onChange={e=>{setRole(e.target.value);setRoleErr("");}} placeholder="Role" style={inpStyle(roleErr)} onFocus={fi} onBlur={fo}/>
         {roleErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{roleErr}</p>}
         {lbl("EMAIL ADDRESS")}
-        <input data-testid="register-email-input" type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailErr("");}} placeholder="ada@company.com" style={inpStyle(emailErr)} onFocus={fi} onBlur={fo}/>
+        <input data-testid="register-email-input" type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailErr("");}} placeholder="email@company.com" style={inpStyle(emailErr)} onFocus={fi} onBlur={fo}/>
         {emailErr&&<p style={{fontSize:11,color:C.error,margin:"2px 0 8px"}}>{emailErr}</p>}
         {sendErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:12,padding:"9px 12px",marginBottom:12}}><AlertCircle size={14} style={{flexShrink:0,marginTop:2}}/>{sendErr}</div>}
         <button data-testid="register-submit" onClick={handleRegister} disabled={sending}
