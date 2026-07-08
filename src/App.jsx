@@ -530,7 +530,7 @@ function RegisterView(){
             style={{...glass,borderRadius:12,padding:"16px 20px",cursor:"pointer",textAlign:"left",width:"100%",transition:"border-color .2s",minHeight:84,boxSizing:"border-box"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
             onMouseLeave={e=>e.currentTarget.style.borderColor="rgba(0,174,239,0.1)"}>
-            {s.banner&&<img src={s.banner} alt="" style={{display:"block",width:"100%",height:96,objectFit:"cover",borderRadius:10,border:`1px solid ${C.border}`,marginBottom:12}}/>}
+            {s.banner&&<img src={s.banner} alt="" style={{display:"block",width:"100%",height:96,objectFit:"cover",objectPosition:`${(s.bannerPos&&s.bannerPos.x)??50}% ${(s.bannerPos&&s.bannerPos.y)??50}%`,borderRadius:10,border:`1px solid ${C.border}`,marginBottom:12}}/>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
               <div style={{flex:1,minWidth:0}}>
                 <p style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,margin:"0 0 5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</p>
@@ -627,7 +627,7 @@ function RegisterView(){
       <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,overflow:"hidden",borderRadius:16}}>
         {hasPoster&&(
           <div className="reg-poster">
-            <img src={sess.banner} alt={sess.title}/>
+            <img src={sess.banner} alt={sess.title} style={{objectPosition:`${(sess.bannerPos&&sess.bannerPos.x)??50}% ${(sess.bannerPos&&sess.bannerPos.y)??50}%`}}/>
           </div>
         )}
         <div className="reg-form">
@@ -907,10 +907,15 @@ function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
 // Stores the image as a data-URL string so it travels with the session record
 // through the app's existing storage (Supabase/localStorage/in-memory) unchanged.
 const BANNER_MAX_BYTES = 2.5 * 1024 * 1024; // 2.5 MB
-function BannerUpload({value,onChange,testid}){
+function BannerUpload({value,pos,onChange,onPosChange,testid}){
   const [err,setErr]=useState("");
-  const [drag,setDrag]=useState(false);
+  const [drag,setDrag]=useState(false);        // file drag-over state
   const inputRef = React.useRef(null);
+  const frameRef = React.useRef(null);
+  const natRef   = React.useRef({w:0,h:0});    // image natural size
+  const dragRef  = React.useRef(null);         // active reposition drag
+  const [grabbing,setGrabbing]=useState(false);
+  const p = pos || {x:50,y:50};
 
   const handleFile=(file)=>{
     setErr("");
@@ -918,10 +923,37 @@ function BannerUpload({value,onChange,testid}){
     if(!/^image\//.test(file.type)){ setErr("Please choose an image file."); return; }
     if(file.size>BANNER_MAX_BYTES){ setErr("Image is too large (max 2.5 MB). Try a smaller/compressed one."); return; }
     const reader=new FileReader();
-    reader.onload=()=>onChange(String(reader.result||""));
+    reader.onload=()=>{ onChange(String(reader.result||"")); onPosChange&&onPosChange({x:50,y:50}); };
     reader.onerror=()=>setErr("Couldn't read that file. Please try again.");
     reader.readAsDataURL(file);
   };
+
+  const clamp=(v)=>Math.max(0,Math.min(100,v));
+  const onImgLoad=e=>{ natRef.current={w:e.target.naturalWidth||0,h:e.target.naturalHeight||0}; };
+  // Drag to reposition: map pointer movement to object-position %, using the
+  // amount the covered image overflows the frame on each axis.
+  const startDrag=(e)=>{
+    if(!onPosChange||!frameRef.current) return;
+    const r=frameRef.current.getBoundingClientRect();
+    const {w:nw,h:nh}=natRef.current;
+    if(!nw||!nh||!r.width||!r.height) return;
+    const scale=Math.max(r.width/nw, r.height/nh);
+    const overX=Math.max(0, nw*scale - r.width);
+    const overY=Math.max(0, nh*scale - r.height);
+    if(overX<=0 && overY<=0) return; // nothing to pan
+    dragRef.current={ sx:e.clientX, sy:e.clientY, px:p.x, py:p.y, overX, overY };
+    setGrabbing(true);
+    try{ e.currentTarget.setPointerCapture(e.pointerId); }catch(_){}
+  };
+  const moveDrag=(e)=>{
+    const d=dragRef.current; if(!d) return;
+    const nx = d.overX>0 ? clamp(d.px - ((e.clientX-d.sx)/d.overX)*100) : d.px;
+    const ny = d.overY>0 ? clamp(d.py - ((e.clientY-d.sy)/d.overY)*100) : d.py;
+    onPosChange({x:nx,y:ny});
+  };
+  const endDrag=(e)=>{ if(!dragRef.current) return; dragRef.current=null; setGrabbing(false); try{ e.currentTarget.releasePointerCapture(e.pointerId); }catch(_){} };
+
+  const chipBtn={background:"rgba(13,27,42,0.8)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontFamily:"monospace",display:"flex",alignItems:"center",gap:5};
 
   return(
     <div>
@@ -929,15 +961,24 @@ function BannerUpload({value,onChange,testid}){
         onChange={e=>{handleFile(e.target.files&&e.target.files[0]); e.target.value="";}}
         style={{display:"none"}}/>
       {value ? (
-        <div style={{position:"relative",marginTop:5,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-          <img src={value} alt="Session banner" style={{display:"block",width:"100%",maxHeight:150,objectFit:"cover"}}/>
+        <div ref={frameRef} data-testid={testid?testid+"-frame":undefined} style={{position:"relative",marginTop:5,height:180,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,touchAction:"none"}}>
+          <img src={value} alt="Session poster" draggable={false} onLoad={onImgLoad}
+            data-testid={testid?testid+"-img":undefined}
+            onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
+            style={{display:"block",width:"100%",height:"100%",objectFit:"cover",objectPosition:`${p.x}% ${p.y}%`,cursor:grabbing?"grabbing":"grab",userSelect:"none"}}/>
+          {/* reposition hint */}
+          <div style={{position:"absolute",left:8,bottom:8,display:"flex",alignItems:"center",gap:5,background:"rgba(13,27,42,0.8)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 9px",fontFamily:"monospace",fontSize:10,color:C.textFaint,pointerEvents:"none"}}>
+            <ArrowUpDown size={11}/> Drag image to reposition
+          </div>
           <div style={{position:"absolute",top:8,right:8,display:"flex",gap:6}}>
-            <button type="button" data-testid={testid?testid+"-replace":undefined} onClick={()=>inputRef.current&&inputRef.current.click()}
-              style={{background:"rgba(13,27,42,0.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.border}`,color:C.text,borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontFamily:"monospace",display:"flex",alignItems:"center",gap:5}}>
+            <button type="button" data-testid={testid?testid+"-recenter":undefined} onClick={()=>onPosChange&&onPosChange({x:50,y:50})} title="Recenter" style={chipBtn}>
+              Recenter
+            </button>
+            <button type="button" data-testid={testid?testid+"-replace":undefined} onClick={()=>inputRef.current&&inputRef.current.click()} style={chipBtn}>
               <UploadCloud size={12}/>Replace
             </button>
-            <button type="button" data-testid={testid?testid+"-remove":undefined} onClick={()=>{onChange("");setErr("");}}
-              style={{background:"rgba(13,27,42,0.75)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",border:`1px solid ${C.error}66`,color:C.error,borderRadius:8,padding:"5px 7px",cursor:"pointer",display:"flex",alignItems:"center"}} title="Remove banner">
+            <button type="button" data-testid={testid?testid+"-remove":undefined} onClick={()=>{onChange("");setErr("");onPosChange&&onPosChange({x:50,y:50});}}
+              style={{...chipBtn,border:`1px solid ${C.error}66`,color:C.error,padding:"5px 7px"}} title="Remove poster">
               <X size={13}/>
             </button>
           </div>
@@ -970,7 +1011,7 @@ function StatCard({label,value,small}){
 
 function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
   const [showForm,setShowForm]=useState(false);
-  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState(""); const [banner,setBanner]=useState("");
+  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState(""); const [banner,setBanner]=useState(""); const [bannerPos,setBannerPos]=useState({x:50,y:50});
   const [fErr,setFErr]=useState(""); const [busy,setBusy]=useState(false);
   const [confDel,setConfDel]=useState(null);
   const [editSid,setEditSid]=useState(null);    // session being edited
@@ -981,17 +1022,17 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
   const create=async()=>{
     if(!title.trim()){setFErr("Session title is required.");return;}
     setBusy(true);setFErr("");
-    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),banner:banner||"",active:true,createdAt:new Date().toISOString()};
+    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),banner:banner||"",bannerPos,active:true,createdAt:new Date().toISOString()};
     const next=[...sessions,s];
     const ok=await safeSave(SESSIONS_KEY,next);
-    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setBanner("");setShowForm(false);}
+    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setBanner("");setBannerPos({x:50,y:50});setShowForm(false);}
     else setFErr("Failed to save.");
     setBusy(false);
   };
 
   const startEdit=(s)=>{
     setEditSid(s.id);
-    setEditDraft({title:s.title,date:s.date||"",description:s.description||"",banner:s.banner||""});
+    setEditDraft({title:s.title,date:s.date||"",description:s.description||"",banner:s.banner||"",bannerPos:s.bannerPos||{x:50,y:50}});
     setEditErr("");
     setConfDel(null);
   };
@@ -1000,7 +1041,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
   const saveEdit=async()=>{
     if(!editDraft.title?.trim()){setEditErr("Title is required.");return;}
     setEditBusy(true);setEditErr("");
-    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim(),banner:editDraft.banner||""}:s);
+    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim(),banner:editDraft.banner||"",bannerPos:editDraft.bannerPos||{x:50,y:50}}:s);
     const ok=await safeSave(SESSIONS_KEY,next);
     if(ok){await logActivity(me?.name,"Edited session",`${editDraft.title.trim()} [${editSid}]`);setSessions(next);cancelEdit();}
     else setEditErr("Failed to save. Try again.");
@@ -1059,7 +1100,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BANNER IMAGE</label>
-              <BannerUpload testid="session-banner" value={banner} onChange={setBanner}/>
+              <BannerUpload testid="session-banner" value={banner} pos={bannerPos} onChange={setBanner} onPosChange={setBannerPos}/>
             </div>
             {fErr&&<p style={{fontSize:12,color:C.error}}>{fErr}</p>}
             <div style={{display:"flex",gap:8}}>
@@ -1101,7 +1142,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BANNER IMAGE</label>
-                        <BannerUpload testid="session-edit-banner" value={editDraft.banner} onChange={v=>setEditDraft(d=>({...d,banner:v}))}/>
+                        <BannerUpload testid="session-edit-banner" value={editDraft.banner} pos={editDraft.bannerPos} onChange={v=>setEditDraft(d=>({...d,banner:v}))} onPosChange={v=>setEditDraft(d=>({...d,bannerPos:v}))}/>
                       </div>
                       {editErr&&<p style={{fontSize:12,color:C.error}}>{editErr}</p>}
                       <div style={{display:"flex",gap:8}}>
