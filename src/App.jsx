@@ -142,18 +142,18 @@ export default function App(){
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
       <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}
-.reg-card{display:flex;flex-direction:column;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.35),0 0 0 1px rgba(0,174,239,0.05);}
+.reg-card{display:flex;flex-direction:column;border-radius:16px;overflow:hidden;}
 .reg-poster{position:relative;overflow:hidden;}
-.reg-poster img{display:block;width:100%;height:auto;transition:transform 700ms cubic-bezier(0.4,0,0.2,1);}
-.reg-card:hover .reg-poster img{transform:scale(1.03);}
+.reg-poster img{display:block;width:100%;height:auto;}
 .reg-form{padding:30px 26px;width:100%;position:relative;}
+.reg-card.has-poster .reg-form{padding-top:10px;}
 .reg-eyebrow{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
 .reg-eyebrow::before{content:"";display:block;width:20px;height:2px;background:${C.accent};border-radius:2px;flex-shrink:0;}
 @media (min-width:860px){
 .reg-card.has-poster{flex-direction:row;align-items:stretch}
 .reg-card.has-poster .reg-poster{width:60%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .reg-card.has-poster .reg-poster img{width:100%;height:auto;object-fit:contain}
-.reg-card.has-poster .reg-form{width:40%;display:flex;flex-direction:column;justify-content:center;padding:25px 25px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
+.reg-card.has-poster .reg-form{width:40%;display:flex;flex-direction:column;justify-content:center;padding:25px 25px;}
 }
 .rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
       <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
@@ -349,7 +349,7 @@ const DEFAULT_TEMPLATES = {
   confirmation: {
     enabled: false,
     subject: "You're registered for {{session_title}}",
-    body: "Hi {{name}},\n\nThanks for registering — your spot is confirmed. We look forward to seeing you there!"
+    body: "Hi {{name}},\n\nThanks for registering for {{session_title}} — your spot is confirmed.\n\nDate: {{session_date}}\n\nWe'll share the joining link with you soon. Looking forward to seeing you there!\n\nThanks,\nAnubhav"
   },
   bulk: {
     subject: "An update about {{session_title}}",
@@ -657,7 +657,7 @@ function RegisterView(){
           ← All sessions
         </button>
       )}
-      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,background:"rgba(27,58,92,0.60)",borderRadius:20}}>
+      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass}}>
         {hasPoster&&(
           <div className="reg-poster">
             <img src={sess.banner} alt={sess.title} style={{objectPosition:`${(sess.bannerPos&&sess.bannerPos.x)??50}% ${(sess.bannerPos&&sess.bannerPos.y)??50}%`}}/>
