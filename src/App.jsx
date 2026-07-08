@@ -145,16 +145,14 @@ export default function App(){
 .reg-card{display:flex;flex-direction:column;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.35),0 0 0 1px rgba(0,174,239,0.05);}
 .reg-poster{position:relative;overflow:hidden;}
 .reg-poster img{display:block;width:100%;height:auto;transition:transform 700ms cubic-bezier(0.4,0,0.2,1);}
-.reg-poster::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom, rgba(13,27,42,0) 58%, rgba(13,27,42,0.60) 100%);pointer-events:none;}
 .reg-card:hover .reg-poster img{transform:scale(1.03);}
 .reg-form{padding:30px 26px;width:100%;position:relative;}
 .reg-eyebrow{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
 .reg-eyebrow::before{content:"";display:block;width:20px;height:2px;background:${C.accent};border-radius:2px;flex-shrink:0;}
 @media (min-width:860px){
 .reg-card.has-poster{flex-direction:row;align-items:stretch}
-.reg-card.has-poster .reg-poster{width:56%;flex-shrink:0;overflow:hidden;background:${C.bgPanel};display:flex;align-items:center;justify-content:center;}
+.reg-card.has-poster .reg-poster{width:56%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .reg-card.has-poster .reg-poster img{width:100%;height:auto;object-fit:contain}
-.reg-card.has-poster .reg-poster::after{background:linear-gradient(to right, rgba(13,27,42,0) 62%, rgba(13,27,42,0.68) 100%)}
 .reg-card.has-poster .reg-form{width:44%;display:flex;flex-direction:column;justify-content:center;padding:48px 42px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
 }
 .rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
@@ -651,7 +649,7 @@ function RegisterView(){
           ← All sessions
         </button>
       )}
-      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,borderRadius:20}}>
+      <div className={"reg-card"+(hasPoster?" has-poster":"")} style={{...glass,background:"rgba(27,58,92,0.60)",borderRadius:20}}>
         {hasPoster&&(
           <div className="reg-poster">
             <img src={sess.banner} alt={sess.title} style={{objectPosition:`${(sess.bannerPos&&sess.bannerPos.x)??50}% ${(sess.bannerPos&&sess.bannerPos.y)??50}%`}}/>
