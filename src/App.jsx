@@ -151,9 +151,9 @@ export default function App(){
 .reg-eyebrow::before{content:"";display:block;width:20px;height:2px;background:${C.accent};border-radius:2px;flex-shrink:0;}
 @media (min-width:860px){
 .reg-card.has-poster{flex-direction:row;align-items:stretch}
-.reg-card.has-poster .reg-poster{width:56%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.reg-card.has-poster .reg-poster{width:60%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .reg-card.has-poster .reg-poster img{width:100%;height:auto;object-fit:contain}
-.reg-card.has-poster .reg-form{width:44%;display:flex;flex-direction:column;justify-content:center;padding:48px 42px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
+.reg-card.has-poster .reg-form{width:40%;display:flex;flex-direction:column;justify-content:center;padding:25px 25px;box-shadow:inset 1px 0 0 rgba(0,174,239,0.10);}
 }
 .rfs::-webkit-scrollbar{height:6px;width:6px}.rfs::-webkit-scrollbar-track{background:transparent}.rfs::-webkit-scrollbar-thumb{background:rgba(63,196,245,.35);border-radius:999px}.rfs::-webkit-scrollbar-thumb:hover{background:rgba(63,196,245,.6)}.rfs{scrollbar-width:thin;scrollbar-color:rgba(63,196,245,.35) transparent}input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.20)}@keyframes neon-pulse{0%,100%{box-shadow:0 0 20px rgba(0,174,239,0.15),0 0 60px rgba(0,174,239,0.05)}50%{box-shadow:0 0 30px rgba(0,174,239,0.25),0 0 80px rgba(0,174,239,0.10)}}.neon-glow{animation:neon-pulse 3s ease-in-out infinite}`}</style>
       <div style={{position:"absolute",top:"-10%",left:"-10%",width:420,height:420,borderRadius:"50%",background:C.accent,opacity:.18,filter:"blur(90px)",pointerEvents:"none"}}/>
@@ -163,7 +163,7 @@ export default function App(){
           <div style={{maxWidth:980,margin:"0 auto",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:8,height:8,borderRadius:"50%",background:C.accent}}/>
-              <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.15em",color:C.textFaint,textTransform:"uppercase"}}>AI Ready</span>
+              <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.15em",color:C.textFaint,textTransform:"uppercase"}}>Shri Tech Partners</span>
             </div>
             <button data-testid="toggle-view" onClick={()=>setView(v=>v==="register"?"admin":"register")} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               {view==="register"?<><ShieldCheck size={14}/>Admin</>:<>← Registration</>}
@@ -230,7 +230,7 @@ function buildOtpEmailHtml(toName, otpCode, sessionTitle, expiryMinutes) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="ec"
   style="max-width:460px;width:100%;table-layout:fixed;background-color:#0d1b2a;border:1px solid #14344d;border-radius:16px;overflow:hidden;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <tr><td class="px" style="padding:22px 24px 0 24px;">
-    <p style="margin:0;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;color:rgba(255,255,255,0.45);text-transform:uppercase;">&#9679;&nbsp; AI READY</p>
+    <p style="margin:0;font-family:'Courier New',monospace;font-size:12px;letter-spacing:2px;color:rgba(255,255,255,0.45);text-transform:uppercase;">&#9679;&nbsp; Shri Tech Partners</p>
   </td></tr>
   <tr><td class="px" style="padding:20px 24px 0 24px;">
     <p style="margin:0 0 8px 0;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;color:#00aeef;text-transform:uppercase;">Email Verification</p>
@@ -255,7 +255,7 @@ function buildOtpEmailHtml(toName, otpCode, sessionTitle, expiryMinutes) {
   <tr><td class="px" style="padding:20px 24px 24px 24px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr><td style="border-top:1px solid #14344d;padding-top:18px;">
-        <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;">For your security, this code can only be used once and expires in \${expiryMinutes} minutes. AI Ready will never ask for your password or payment details by email.</p>
+        <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;">For your security, this code can only be used once and expires in \${expiryMinutes} minutes. Shri Tech Partners will never ask for your password or payment details by email.</p>
       </td></tr>
     </table>
   </td></tr>
@@ -301,7 +301,7 @@ const EMAIL_PLACEHOLDERS = ["name","email","session_title","session_date"];
 function buildBrandedEmail(opts){
   var o = opts || {};
   var bodyHtml = o.bodyHtml || "";
-  var eyebrow = o.eyebrow || "AI Ready";
+  var eyebrow = o.eyebrow || "Shri Tech Partners";
   var sessionTitle = o.sessionTitle || "";
   var sessionDate = o.sessionDate || "";
   // Session detail — simple frost-glass panel (fonts kept; no cyan accent).
@@ -331,7 +331,7 @@ function buildBrandedEmail(opts){
     '<tr><td style="padding:16px 26px 0 26px;font-size:14px;color:rgba(255,255,255,0.82);line-height:1.7;">' + bodyHtml + '</td></tr>' +
     sessionCard +
     // footer
-    '<tr><td style="padding:24px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid rgba(0,174,239,0.15);padding-top:16px;"><p style="margin:0;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">You are receiving this because you registered with AI Ready.</p></td></tr></table></td></tr>' +
+    '<tr><td style="padding:24px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid rgba(0,174,239,0.15);padding-top:16px;"><p style="margin:0;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">You are receiving this because you registered with Shri Tech Partners.</p></td></tr></table></td></tr>' +
     '<tr><td style="padding:16px 26px 24px 26px;"><p style="margin:0;font-family:monospace;font-size:10px;color:rgba(255,255,255,0.40);text-align:center;letter-spacing:0.5px;">Registrations are stored securely and never shared with third parties.</p></td></tr>' +
   '</table>' +
   '</td></tr></table></body></html>';
@@ -545,7 +545,7 @@ function RegisterView(){
   if(!sess) return(
     <div style={{width:"100%",maxWidth:480,marginTop:20}}>
       <div className="rpad" style={{padding:"28px 32px 24px",...glass,marginBottom:16}}>
-        <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>AI Ready · Registration</p>
+        <p style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase",marginBottom:8}}>Shri Tech Partners · Registration</p>
         <h1 style={{fontSize:22,fontWeight:700,marginBottom:6}}>Select your session</h1>
         <p style={{fontSize:13,color:C.textDim}}>Choose the session you'd like to register for.</p>
       </div>
