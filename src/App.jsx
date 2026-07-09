@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Check, AlertCircle, Loader2, Download, Users, ClipboardList,
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
@@ -1041,10 +1041,10 @@ const BANNER_MAX_BYTES = 2.5 * 1024 * 1024; // 2.5 MB
 function BannerUpload({value,pos,onChange,onPosChange,testid}){
   const [err,setErr]=useState("");
   const [drag,setDrag]=useState(false);        // file drag-over state
-  const inputRef = React.useRef(null);
-  const frameRef = React.useRef(null);
-  const natRef   = React.useRef({w:0,h:0});    // image natural size
-  const dragRef  = React.useRef(null);         // active reposition drag
+  const inputRef = useRef(null);
+  const frameRef = useRef(null);
+  const natRef   = useRef({w:0,h:0});    // image natural size
+  const dragRef  = useRef(null);         // active reposition drag
   const [grabbing,setGrabbing]=useState(false);
   const p = pos || {x:50,y:50};
 
@@ -1357,7 +1357,7 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
   const display=useMemo(()=>{
     const q=query.trim().toLowerCase();
     let l=regs;
-    if(q) l=l.filter(r=>r.name?.toLowerCase().includes(q)||r.email?.toLowerCase().includes(q));
+    if(q) l=l.filter(r=>[r.name,r.email,r.role].some(v=>(v||"").toLowerCase().includes(q)));
     return[...l].sort((a,b)=>{
       const av=(a[sk]||"").toString().toLowerCase(),bv=(b[sk]||"").toString().toLowerCase();
       if(av<bv) return sd==="asc"?-1:1; if(av>bv) return sd==="asc"?1:-1; return 0;
@@ -1392,8 +1392,8 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
 
   const exportCsv=()=>{
     logActivity(me?.name,"Exported registrations",`${selSid} (${display.length} rows)`);
-    const hdr=["Name","First Name","Last Name","Role","Email","Registered At","Status"];
-    const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.firstName||"",r.lastName||"",r.role||"",r.email,fmt(r.registeredAt),st.label];});
+    const hdr=["Name","First Name","Last Name","Role","Email","Verified","Registered At","Status"];
+    const rows=display.map(r=>{const st=getSt(r.email,selSid);return[r.name,r.firstName||"",r.lastName||"",r.role||"",r.email,r.verified?"Yes":"No",fmt(r.registeredAt),st.label];});
     const csv = [hdr,...rows].map(row=>row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1439,7 +1439,7 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
 
       <div style={{position:"relative",marginBottom:12}}>
         <Search size={13} color={C.textFaint} style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}/>
-        <input data-testid="reg-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name or email..." style={{...iSty,paddingLeft:32}}/>
+        <input data-testid="reg-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by name, role or email..." style={{...iSty,paddingLeft:32}}/>
       </div>
 
       {actErr&&<div style={{display:"flex",gap:8,fontSize:13,color:C.error,background:`${C.error}1A`,border:`1px solid ${C.error}4D`,borderRadius:8,padding:"8px 12px",marginBottom:10}}><AlertCircle size={14} style={{flexShrink:0,marginTop:1}}/>{actErr}</div>}
@@ -1453,10 +1453,10 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
         <div style={{textAlign:"center",padding:"32px 0",color:C.textFaint,fontSize:14}}>No results match "{query}".</div>
       ):(
         <div className="rfs" style={{border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",overflowX:"auto",background:"rgba(255,255,255,0.03)"}}>
-          <table data-testid="reg-table" style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:580}}>
+          <table data-testid="reg-table" style={{width:"100%",fontSize:13,borderCollapse:"collapse",minWidth:680}}>
             <thead>
               <tr style={{background:"rgba(255,255,255,0.06)"}}>
-                {[["name","Name"],["email","Email"],["registeredAt","Registered"],["status","Status"]].map(([k,l])=>(
+                {[["name","Name"],["role","Role"],["email","Email"],["registeredAt","Registered"],["status","Status"]].map(([k,l])=>(
                   <th key={k} onClick={()=>k!=="status"&&tSort(k)} style={{padding:"9px 14px",fontFamily:"monospace",fontSize:10,color:C.textFaint,textTransform:"uppercase",letterSpacing:"0.05em",whiteSpace:"nowrap",textAlign:"left",cursor:k!=="status"?"pointer":"default",userSelect:"none"}}>
                     <span style={{display:"inline-flex",alignItems:"center",gap:4}}>{l}{k!=="status"&&sIcon(k)}</span>
                   </th>
@@ -1474,8 +1474,18 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
                       {isEd?<input value={draft.name||""} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:130}}/>:reg.name}
                     </td>
+                    <td data-testid={"reg-role-"+reg.email} style={{padding:"9px 14px",whiteSpace:"nowrap",color:C.textDim}}>
+                      {isEd
+                        ? <input value={draft.role||""} onChange={e=>setDraft(d=>({...d,role:e.target.value}))} placeholder="Role" style={{...iSty,padding:"4px 8px",borderRadius:6,width:120}}/>
+                        : (reg.role || <span style={{color:C.textFaint}}>—</span>)}
+                    </td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap",color:C.textDim}}>
-                      {isEd?<input type="email" value={draft.email||""} onChange={e=>setDraft(d=>({...d,email:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:170}}/>:reg.email}
+                      {isEd
+                        ? <input type="email" value={draft.email||""} onChange={e=>setDraft(d=>({...d,email:e.target.value}))} style={{...iSty,padding:"4px 8px",borderRadius:6,width:170}}/>
+                        : <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                            {reg.email}
+                            {reg.verified && <span title="Email verified via OTP" style={{display:"inline-flex",color:C.success}}><Check size={12}/></span>}
+                          </span>}
                     </td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap",fontFamily:"monospace",fontSize:11,color:C.textFaint}}>{fmt(reg.registeredAt)}</td>
                     <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
