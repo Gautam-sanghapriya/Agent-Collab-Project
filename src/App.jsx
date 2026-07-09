@@ -807,7 +807,7 @@ function RegisterView(){
           </div>
         )}
         <div className="reg-form">
-      <p className="reg-eyebrow" style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Registration · {sess.id}</p>
+      <p className="reg-eyebrow" style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Registration</p>
       <h1 style={{fontSize:24,fontWeight:700,lineHeight:1.32,letterSpacing:"-0.01em",marginBottom:6}}>{sess.title}</h1>
       {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:sess.description?10:4}}>{sessionWhen(sess)}</p>}
       {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.6,marginBottom:22}}>{sess.description}</p>}
