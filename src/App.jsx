@@ -322,12 +322,60 @@ async function postToAppsScript(cfg, payload){
   });
 }
 
+// ── Session date/time range ────────────────────────────────────────────────
+// Sessions store `date` (start) and optional `endDate` (end) as display strings
+// in the picker's format: "15 Aug 2026 · 3:00 PM IST".
+const DT_RE = /^(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) · (\d{1,2}):(\d{2}) (AM|PM)(?: ([A-Z]{2,5}))?$/;
+function parseWhen(s){
+  const m = DT_RE.exec((s||"").trim());
+  if(!m) return null;
+  return { day:m[1], mon:m[2], year:m[3], time:`${m[4]}:${m[5]} ${m[6]}`, tz:m[7]||"" };
+}
+// Collapse to "15 Aug 2026 · 3:00 PM – 4:30 PM IST" when both fall on the same
+// day; otherwise show both in full. Falls back to raw strings if unparseable.
+function sessionWhen(sess){
+  const start=(sess&&sess.date)||"", end=(sess&&sess.endDate)||"";
+  if(!start) return end || "";
+  if(!end) return start;
+  const a=parseWhen(start), b=parseWhen(end);
+  if(!a||!b) return `${start} – ${end}`;
+  const sameDay = a.day===b.day && a.mon===b.mon && a.year===b.year;
+  const sameTz  = (a.tz||"")===(b.tz||"");
+  // Only collapse when both the day AND timezone match — otherwise the range
+  // would silently drop one of the zones.
+  if(sameDay && sameTz){
+    const tz = a.tz || b.tz;
+    return `${a.day} ${a.mon} ${a.year} · ${a.time} – ${b.time}${tz?" "+tz:""}`;
+  }
+  return `${start} – ${end}`;
+}
+// True when end is strictly before start (same day, same tz) — used for validation.
+function endsBeforeStart(start,end){
+  const a=parseWhen(start), b=parseWhen(end);
+  if(!a||!b) return false;
+  const to24=(t)=>{const m=/^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(t);let h=+m[1]%12;if(m[3]==="PM")h+=12;return h*60+ +m[2];};
+  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const ad=new Date(+a.year,MON.indexOf(a.mon),+a.day).getTime()+to24(a.time)*60000;
+  const bd=new Date(+b.year,MON.indexOf(b.mon),+b.day).getTime()+to24(b.time)*60000;
+  return bd < ad;
+}
+
 // Replace {{name}}, {{email}}, {{session_title}}, {{session_date}} etc.
 function renderTemplate(str, vars){
   return String(str==null?"":str).replace(/\{\{(\w+)\}\}/g, (_,k)=> (vars[k]!=null ? String(vars[k]) : ""));
 }
 
-const EMAIL_PLACEHOLDERS = ["name","email","session_title","session_date"];
+const EMAIL_PLACEHOLDERS = ["name","first_name","last_name","role","email","session_title","session_date"];
+// Build the person-related template vars from a registration record.
+// Older records may only have a composed `name`, so first/last are derived
+// from it as a fallback rather than rendering blank.
+function personVars(reg){
+  const full=(reg&&reg.name||"").trim();
+  const parts=full.split(/\s+/).filter(Boolean);
+  const first=(reg&&reg.firstName||"").trim() || parts[0] || "";
+  const last =(reg&&reg.lastName ||"").trim() || (parts.length>1?parts.slice(1).join(" "):"");
+  return { name: full || [first,last].filter(Boolean).join(" "), first_name:first, last_name:last, role:(reg&&reg.role||"").trim(), email:(reg&&reg.email||"").trim() };
+}
 
 // ── Email banner: compress + CID embedding ──────────────────────────────────
 // A raw poster data-URL is far too large for an email body (and Gmail/Outlook
@@ -427,7 +475,7 @@ const DEFAULT_TEMPLATES = {
   confirmation: {
     enabled: false,
     subject: "You're registered for {{session_title}}",
-    body: "Hi {{name}},\n\nThanks for registering for {{session_title}} — your spot is confirmed.\nDate: {{session_date}}\nWe'll share the joining link with you soon. Looking forward to seeing you there!\n\nThanks, Anubhav"
+    body: "Hi {{first_name}},\n\nYou have successfully registered for the following live workshop:\n{{session_title}}\nDate: {{session_date}}\n\nWe'll share the joining link with you soon. Looking forward to seeing you there!\n\nThanks,\nAnubhav"
   },
   bulk: {
     subject: "An update about {{session_title}}",
@@ -528,14 +576,14 @@ function RegisterView(){
     try{
       const conf = templates && templates.confirmation;
       if(conf && conf.enabled && emailCfg && emailCfg.url){
-        const vars = { name:nm, email:norm, session_title:sess.title, session_date:sess.date||"" };
+        const vars = { ...personVars({name:nm, firstName:firstName.trim(), lastName:lastName.trim(), role:role.trim(), email:norm}), session_title:sess.title, session_date:sessionWhen(sess) };
         const subject = renderTemplate(conf.subject, vars);
         const inner = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
         // Compress the poster and attach it inline (CID) so it renders in mail
         // clients without inflating the body past the size limit.
         (async()=>{
           const bn = sess.banner ? await makeEmailBanner(sess.banner) : null;
-          const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"", bannerSrc: bn?"cid:banner":"" });
+          const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sessionWhen(sess), bannerSrc: bn?"cid:banner":"" });
           const payload = { type:"confirmation", to_email:norm, to_name:nm, subject, html };
           if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
           postToAppsScript(emailCfg, payload).catch(()=>{});
@@ -654,7 +702,7 @@ function RegisterView(){
                 <p style={{fontSize:14,fontWeight:700,color:C.text,lineHeight:1.4,margin:"0 0 5px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.title}</p>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:10,fontFamily:"monospace",color:C.accent,background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:4,padding:"2px 7px",flexShrink:0,whiteSpace:"nowrap"}}>{s.id}</span>
-                  {s.date&&<span style={{fontSize:11,color:C.textFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.date}</span>}
+                  {s.date&&<span style={{fontSize:11,color:C.textFaint,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sessionWhen(s)}</span>}
                 </div>
               </div>
               <span style={{fontSize:14,color:C.accent,flexShrink:0}}>→</span>
@@ -673,8 +721,18 @@ function RegisterView(){
       </div>
       <h2 style={{fontSize:20,fontWeight:700,marginBottom:8}}>You're registered!</h2>
       <p style={{fontSize:14,color:C.textDim,lineHeight:1.6,marginBottom:4}}><span style={{color:C.text,fontWeight:600}}>{sess.title}</span></p>
-      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:16}}>{sess.date}</p>}
+      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:16}}>{sessionWhen(sess)}</p>}
       <p style={{fontSize:13,color:C.textDim}}>Your email <span style={{color:C.text}}>{email}</span> has been verified and your spot is confirmed.</p>
+      {templates?.confirmation?.enabled && (
+        <div data-testid="register-spam-note" style={{marginTop:16,textAlign:"left",background:"rgba(0,174,239,0.06)",border:`1px solid ${C.accent}33`,borderRadius:10,padding:"12px 14px"}}>
+          <p style={{fontSize:12,color:C.textDim,lineHeight:1.6,margin:0}}>
+            Please check your inbox for confirmation email. If you don’t see it in your inbox, please check your Spam or Junk folder.
+          </p>
+          <p style={{fontSize:12,color:C.textDim,lineHeight:1.6,margin:"6px 0 0"}}>
+            Kindly mark it as “Not Spam” to ensure you receive future emails from us in your inbox.
+          </p>
+        </div>
+      )}
       <div style={{display:"flex",gap:10,justifyContent:"center",marginTop:20,flexWrap:"wrap"}}>
         <button onClick={()=>{setFirstName("");setLastName("");setRole("");setEmail("");setOtpInput("");setStep("form");}} style={{fontFamily:"monospace",fontSize:12,color:C.accent,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>Register another person</button>
         {sessions.length>1&&<button onClick={()=>{setFirstName("");setLastName("");setRole("");setEmail("");setOtpInput("");setStep("form");setSess(null);}} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",textDecoration:"underline"}}>← Back to sessions</button>}
@@ -751,7 +809,7 @@ function RegisterView(){
         <div className="reg-form">
       <p className="reg-eyebrow" style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Registration · {sess.id}</p>
       <h1 style={{fontSize:24,fontWeight:700,lineHeight:1.32,letterSpacing:"-0.01em",marginBottom:6}}>{sess.title}</h1>
-      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:sess.description?10:4}}>{sess.date}</p>}
+      {sess.date&&<p style={{fontSize:13,color:C.textFaint,marginBottom:sess.description?10:4}}>{sessionWhen(sess)}</p>}
       {sess.description&&<p style={{fontSize:13,color:C.textDim,lineHeight:1.6,marginBottom:22}}>{sess.description}</p>}
       <div style={{height:1,background:"linear-gradient(to right, rgba(0,174,239,0.18), rgba(255,255,255,0))",marginBottom:22}}/>
       <div onKeyDown={e=>{if(e.key==="Enter"&&!sending) handleRegister();}}>
@@ -919,12 +977,18 @@ function AdminView(){
 // Applies the app's standard format: "15 Aug 2026 · 3:00 PM IST".
 const DTP_MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DTP_TIMEZONES=["IST","UTC","GMT","BST","CET","CEST","EET","GST","SGT","HKT","JST","KST","AEST","AEDT","NZST","EST","EDT","CST","CDT","MST","MDT","PST","PDT","BRT"];
-function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
+// One calendar, a start time and an optional end time, and a single timezone.
+// When `onEndChange` is supplied the picker manages both strings together, so a
+// session's start and end always share the same day and zone.
+function DateTimePicker({value,endValue,onChange,onEndChange,placeholder,testid,inputStyle}){
+  const withEnd = typeof onEndChange === "function";
   const [open,setOpen]=useState(false);
   const [view,setView]=useState(()=>{const n=new Date();return {y:n.getFullYear(),m:n.getMonth()};});
   const [selDay,setSelDay]=useState(null);   // {y,m,d}
   const [hh,setHh]=useState(3); const [mm,setMm]=useState(0); const [ap,setAp]=useState("PM");
+  const [eh,setEh]=useState(4); const [em,setEm]=useState(30); const [eap,setEap]=useState("PM");
   const [tz,setTz]=useState("IST");
+  const [dtErr,setDtErr]=useState("");
 
   // When opening, try to prefill from the current value if it matches our format.
   const openPicker=()=>{
@@ -937,18 +1001,36 @@ function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
     } else {
       const n=new Date(); setView({y:n.getFullYear(),m:n.getMonth()}); setSelDay(null);
     }
+    if(withEnd){
+      const e=/^(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) · (\d{1,2}):(\d{2}) (AM|PM)(?: ([A-Z]{2,5}))?/.exec((endValue||"").trim());
+      if(e){ setEh(+e[4]); setEm(+e[5]); setEap(e[6]); }
+    }
+    setDtErr("");
     setOpen(true);
   };
+  // minutes since midnight, for ordering start vs end
+  const mins=(h,m,p)=>((h%12)+(p==="PM"?12:0))*60+m;
 
   const daysIn=(y,m)=>new Date(y,m+1,0).getDate();
   const firstDow=(y,m)=>new Date(y,m,1).getDay(); // 0=Sun
   const nav=(d)=>setView(v=>{let m=v.m+d,y=v.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} return {y,m};});
   const apply=()=>{
     if(!selDay) return;
-    const str=`${selDay.d} ${DTP_MONTHS[selDay.m]} ${selDay.y} · ${hh}:${String(mm).padStart(2,"0")} ${ap} ${tz}`;
-    onChange(str); setOpen(false);
+    const day=`${selDay.d} ${DTP_MONTHS[selDay.m]} ${selDay.y}`;
+    const startStr=`${day} · ${hh}:${String(mm).padStart(2,"0")} ${ap} ${tz}`;
+    if(withEnd){
+      if(mins(eh,em,eap) <= mins(hh,mm,ap)){
+        setDtErr("End time must be after the start time.");
+        return;
+      }
+      const endStr=`${day} · ${eh}:${String(em).padStart(2,"0")} ${eap} ${tz}`;
+      onChange(startStr); onEndChange(endStr);
+    } else {
+      onChange(startStr);
+    }
+    setDtErr(""); setOpen(false);
   };
-  const clear=()=>{ onChange(""); setOpen(false); };
+  const clear=()=>{ onChange(""); if(withEnd) onEndChange(""); setOpen(false); };
   const today=new Date();
   const isToday=(d)=>view.y===today.getFullYear()&&view.m===today.getMonth()&&d===today.getDate();
   const isSel=(d)=>selDay&&selDay.y===view.y&&selDay.m===view.m&&selDay.d===d;
@@ -962,8 +1044,13 @@ function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
   return(
     <div style={{position:"relative"}}>
       <div style={{position:"relative"}}>
-        <input data-testid={testid} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-          style={{...(inputStyle||iSty),paddingRight:38}} onFocus={fi} onBlur={fo}/>
+        <input data-testid={testid}
+          value={withEnd ? sessionWhen({date:value,endDate:endValue}) : value}
+          onChange={e=>{ if(!withEnd) onChange(e.target.value); }}
+          readOnly={withEnd}
+          onClick={()=>{ if(withEnd && !open) openPicker(); }}
+          placeholder={placeholder}
+          style={{...(inputStyle||iSty),paddingRight:38,cursor:withEnd?"pointer":"text"}} onFocus={fi} onBlur={fo}/>
         <button type="button" data-testid={testid?testid+"-toggle":undefined} onClick={()=>open?setOpen(false):openPicker()}
           title="Pick date & time"
           style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",cursor:"pointer",color:open?C.accent:C.textFaint,display:"flex",alignItems:"center",padding:6}}>
@@ -1000,25 +1087,53 @@ function DateTimePicker({value,onChange,placeholder,testid,inputStyle}){
                 </button>
             )}
           </div>
-          {/* time */}
-          <label style={{display:"block",fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>TIME</label>
-          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
-            <select value={hh} onChange={e=>setHh(+e.target.value)} style={selBtn}>
+          {/* start time */}
+          <label style={{display:"block",fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>{withEnd?"START TIME":"TIME"}</label>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:withEnd?10:12}}>
+            <select data-testid={testid?testid+"-start-hh":undefined} value={hh} onChange={e=>{setHh(+e.target.value);setDtErr("");}} style={selBtn}>
               {Array.from({length:12},(_,i)=>i+1).map(h=><option key={h} value={h} style={{background:C.bgPanel}}>{h}</option>)}
             </select>
             <span style={{color:C.textFaint}}>:</span>
-            <select value={mm} onChange={e=>setMm(+e.target.value)} style={selBtn}>
+            <select data-testid={testid?testid+"-start-mm":undefined} value={mm} onChange={e=>{setMm(+e.target.value);setDtErr("");}} style={selBtn}>
               {[0,5,10,15,20,25,30,35,40,45,50,55].map(m=><option key={m} value={m} style={{background:C.bgPanel}}>{String(m).padStart(2,"0")}</option>)}
             </select>
             <div style={{display:"flex",gap:4,marginLeft:4}}>
               {["AM","PM"].map(p=>(
-                <button key={p} type="button" onClick={()=>setAp(p)} style={{fontFamily:"monospace",fontSize:11,border:`1px solid ${ap===p?C.accent:C.border}`,color:ap===p?C.accent:C.textFaint,background:ap===p?"rgba(0,174,239,0.10)":"transparent",borderRadius:6,padding:"6px 9px",cursor:"pointer"}}>{p}</button>
+                <button key={p} type="button" data-testid={testid?testid+"-start-"+p:undefined} onClick={()=>{setAp(p);setDtErr("");}} style={{fontFamily:"monospace",fontSize:11,border:`1px solid ${ap===p?C.accent:C.border}`,color:ap===p?C.accent:C.textFaint,background:ap===p?"rgba(0,174,239,0.10)":"transparent",borderRadius:6,padding:"6px 9px",cursor:"pointer"}}>{p}</button>
               ))}
             </div>
-            <select data-testid={testid?testid+"-tz":undefined} value={tz} onChange={e=>setTz(e.target.value)} style={{...selBtn,marginLeft:"auto",fontFamily:"monospace",fontSize:11}} title="Timezone">
+          </div>
+
+          {/* end time */}
+          {withEnd&&(
+            <>
+              <label style={{display:"block",fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>END TIME</label>
+              <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
+                <select data-testid={testid?testid+"-end-hh":undefined} value={eh} onChange={e=>{setEh(+e.target.value);setDtErr("");}} style={selBtn}>
+                  {Array.from({length:12},(_,i)=>i+1).map(h=><option key={h} value={h} style={{background:C.bgPanel}}>{h}</option>)}
+                </select>
+                <span style={{color:C.textFaint}}>:</span>
+                <select data-testid={testid?testid+"-end-mm":undefined} value={em} onChange={e=>{setEm(+e.target.value);setDtErr("");}} style={selBtn}>
+                  {[0,5,10,15,20,25,30,35,40,45,50,55].map(m=><option key={m} value={m} style={{background:C.bgPanel}}>{String(m).padStart(2,"0")}</option>)}
+                </select>
+                <div style={{display:"flex",gap:4,marginLeft:4}}>
+                  {["AM","PM"].map(p=>(
+                    <button key={p} type="button" data-testid={testid?testid+"-end-"+p:undefined} onClick={()=>{setEap(p);setDtErr("");}} style={{fontFamily:"monospace",fontSize:11,border:`1px solid ${eap===p?C.accent:C.border}`,color:eap===p?C.accent:C.textFaint,background:eap===p?"rgba(0,174,239,0.10)":"transparent",borderRadius:6,padding:"6px 9px",cursor:"pointer"}}>{p}</button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* timezone — applies to both times */}
+          <label style={{display:"block",fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6}}>TIMEZONE</label>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:12}}>
+            <select data-testid={testid?testid+"-tz":undefined} value={tz} onChange={e=>setTz(e.target.value)} style={{...selBtn,flex:1,fontFamily:"monospace",fontSize:11}} title="Timezone">
               {DTP_TIMEZONES.map(z=><option key={z} value={z} style={{background:C.bgPanel}}>{z}</option>)}
             </select>
           </div>
+
+          {dtErr&&<p data-testid={testid?testid+"-error":undefined} style={{fontSize:11,color:C.error,margin:"0 0 10px"}}>{dtErr}</p>}
           {/* actions */}
           <div style={{display:"flex",gap:8}}>
             <button type="button" data-testid={testid?testid+"-apply":undefined} onClick={apply} disabled={!selDay}
@@ -1142,7 +1257,7 @@ function StatCard({label,value,small}){
 
 function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,reload}){
   const [showForm,setShowForm]=useState(false);
-  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState(""); const [banner,setBanner]=useState(""); const [bannerPos,setBannerPos]=useState({x:50,y:50});
+  const [title,setTitle]=useState(""); const [desc,setDesc]=useState(""); const [date,setDate]=useState(""); const [endDate,setEndDate]=useState(""); const [banner,setBanner]=useState(""); const [bannerPos,setBannerPos]=useState({x:50,y:50});
   const [fErr,setFErr]=useState(""); const [busy,setBusy]=useState(false);
   const [confDel,setConfDel]=useState(null);
   const [editSid,setEditSid]=useState(null);    // session being edited
@@ -1152,18 +1267,20 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
 
   const create=async()=>{
     if(!title.trim()){setFErr("Session title is required.");return;}
+    if(endDate.trim() && !date.trim()){setFErr("Set a start date/time before the end time.");return;}
+    if(endsBeforeStart(date.trim(),endDate.trim())){setFErr("End time can't be before the start time.");return;}
     setBusy(true);setFErr("");
-    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),banner:banner||"",bannerPos,active:true,createdAt:new Date().toISOString()};
+    const s={id:"session-"+Date.now(),title:title.trim(),description:desc.trim(),date:date.trim(),endDate:endDate.trim(),banner:banner||"",bannerPos,active:true,createdAt:new Date().toISOString()};
     const next=[...sessions,s];
     const ok=await safeSave(SESSIONS_KEY,next);
-    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setBanner("");setBannerPos({x:50,y:50});setShowForm(false);}
+    if(ok){await logActivity(me?.name,"Created session",`${s.title} [${s.id}]`);setSessions(next);setTitle("");setDesc("");setDate("");setEndDate("");setBanner("");setBannerPos({x:50,y:50});setShowForm(false);}
     else setFErr("Failed to save.");
     setBusy(false);
   };
 
   const startEdit=(s)=>{
     setEditSid(s.id);
-    setEditDraft({title:s.title,date:s.date||"",description:s.description||"",banner:s.banner||"",bannerPos:s.bannerPos||{x:50,y:50}});
+    setEditDraft({title:s.title,date:s.date||"",endDate:s.endDate||"",description:s.description||"",banner:s.banner||"",bannerPos:s.bannerPos||{x:50,y:50}});
     setEditErr("");
     setConfDel(null);
   };
@@ -1171,8 +1288,10 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
 
   const saveEdit=async()=>{
     if(!editDraft.title?.trim()){setEditErr("Title is required.");return;}
+    if((editDraft.endDate||"").trim() && !(editDraft.date||"").trim()){setEditErr("Set a start date/time before the end time.");return;}
+    if(endsBeforeStart((editDraft.date||"").trim(),(editDraft.endDate||"").trim())){setEditErr("End time can't be before the start time.");return;}
     setEditBusy(true);setEditErr("");
-    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),description:editDraft.description.trim(),banner:editDraft.banner||"",bannerPos:editDraft.bannerPos||{x:50,y:50}}:s);
+    const next=sessions.map(s=>s.id===editSid?{...s,title:editDraft.title.trim(),date:editDraft.date.trim(),endDate:(editDraft.endDate||"").trim(),description:editDraft.description.trim(),banner:editDraft.banner||"",bannerPos:editDraft.bannerPos||{x:50,y:50}}:s);
     const ok=await safeSave(SESSIONS_KEY,next);
     if(ok){await logActivity(me?.name,"Edited session",`${editDraft.title.trim()} [${editSid}]`);setSessions(next);cancelEdit();}
     else setEditErr("Failed to save. Try again.");
@@ -1223,7 +1342,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
-              <div style={{marginTop:5}}><DateTimePicker testid="session-date-input" value={date} onChange={setDate} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST"/></div>
+              <div style={{marginTop:5}}><DateTimePicker testid="session-date-input" value={date} endValue={endDate} onChange={setDate} onEndChange={setEndDate} placeholder="e.g. 15 Aug 2026 · 3:00 PM – 4:30 PM IST"/></div>
             </div>
             <div>
               <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
@@ -1265,7 +1384,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DATE / TIME</label>
-                        <div style={{marginTop:5}}><DateTimePicker testid="session-edit-date" value={editDraft.date} onChange={v=>setEditDraft(d=>({...d,date:v}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM IST"/></div>
+                        <div style={{marginTop:5}}><DateTimePicker testid="session-edit-date" value={editDraft.date} endValue={editDraft.endDate||""} onChange={v=>setEditDraft(d=>({...d,date:v}))} onEndChange={v=>setEditDraft(d=>({...d,endDate:v}))} placeholder="e.g. 15 Aug 2026 · 3:00 PM – 4:30 PM IST"/></div>
                       </div>
                       <div>
                         <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>DESCRIPTION</label>
@@ -1294,7 +1413,7 @@ function SessionsTab({me,sessions,setSessions,allRegs,selSid,setSelSid,setTab,re
                           <span style={{fontSize:10,fontFamily:"monospace",color:C.textFaint}}>{s.id}</span>
                         </div>
                         <p style={{fontSize:14,fontWeight:600,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.title}</p>
-                        <p style={{fontSize:12,color:C.textFaint}}>{s.date||"No date set"} · {count} registrant{count!==1?"s":""}</p>
+                        <p style={{fontSize:12,color:C.textFaint}}>{sessionWhen(s)||"No date set"} · {count} registrant{count!==1?"s":""}</p>
                         {s.description&&<p style={{fontSize:12,color:C.textDim,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.description}</p>}
                       </div>
                       <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
@@ -1427,7 +1546,7 @@ function RegistrationsTab({me,sessions,allRegs,setAllRegs,selSid,setSelSid,loadi
         <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
           <div>
             <span style={{fontSize:13,fontWeight:600,color:C.textDim}}>{sess.title}</span>
-            {sess.date&&<span style={{fontSize:11,color:C.textFaint,marginLeft:8}}>{sess.date}</span>}
+            {sess.date&&<span style={{fontSize:11,color:C.textFaint,marginLeft:8}}>{sessionWhen(sess)}</span>}
           </div>
           <div style={{display:"flex",gap:14,fontSize:12}}>
             <span style={{color:C.textFaint}}>Total <span style={{color:C.text,fontWeight:700}}>{regs.length}</span></span>
@@ -1718,7 +1837,7 @@ function EmailsTab({me,sessions,allRegs}){
     if(!cfgUrl){ setCErr("No Apps Script URL configured. Set it in Settings first."); return; }
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testTo.trim())){ setCErr("Enter a valid test email address."); return; }
     setTestBusy(true);
-    const vars={ name:"Test User", email:testTo.trim(), session_title:"Sample Session", session_date:"1 Jan 2026 · 10:00 AM" };
+    const vars={ ...personVars({name:"Test User", firstName:"Test", lastName:"User", role:"Scrum Master", email:testTo.trim()}), session_title:"Sample Session", session_date:"1 Jan 2026 · 10:00 AM – 11:30 AM IST" };
     const subject=renderTemplate(cSubject,vars);
     const inner=renderTemplate(cBody,vars).replace(/\n/g,"<br>");
     const bn = (sessions[0]&&sessions[0].banner) ? await makeEmailBanner(sessions[0].banner) : null;
@@ -1744,7 +1863,7 @@ function EmailsTab({me,sessions,allRegs}){
     setSending(true); setProgress({done:0,total:targets.length});
     for(let i=0;i<targets.length;i++){
       const r=targets[i];
-      const vars={ name:r.name, email:r.email, session_title:(sess&&sess.title)||"", session_date:(sess&&sess.date)||"" };
+      const vars={ ...personVars(r), session_title:(sess&&sess.title)||"", session_date:sessionWhen(sess) };
       const subject=renderTemplate(bSubject,vars);
       const inner=renderTemplate(bBody,vars).replace(/\n/g,"<br>");
       const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date,bannerSrc:bn?"cid:banner":""});
@@ -1771,10 +1890,10 @@ function EmailsTab({me,sessions,allRegs}){
 
   // Live previews (sample data filled into placeholders, wrapped in brand shell)
   const sampleSess = sessions[0] || {};
-  const confVars = { name:"Ada Lovelace", email:"ada@example.com", session_title:sampleSess.title||"AI Basics for Teams", session_date:sampleSess.date||"15 Aug 2026 · 3:00 PM IST" };
+  const confVars = { ...personVars({name:"Ada Lovelace", firstName:"Ada", lastName:"Lovelace", role:"Engineer", email:"ada@example.com"}), session_title:sampleSess.title||"AI Basics for Teams", session_date:sessionWhen(sampleSess)||"15 Aug 2026 · 3:00 PM – 4:30 PM IST" };
   const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date, bannerSrc:sampleSess.banner||"" });
   const bulkSess = sessions.find(s=>s.id===bSid) || {};
-  const bulkVars = { name:(recips[0]&&recips[0].name)||"Ada Lovelace", email:(recips[0]&&recips[0].email)||"ada@example.com", session_title:bulkSess.title||"", session_date:bulkSess.date||"" };
+  const bulkVars = { ...personVars(recips[0]||{name:"Ada Lovelace",firstName:"Ada",lastName:"Lovelace",role:"Engineer",email:"ada@example.com"}), session_title:bulkSess.title||"", session_date:sessionWhen(bulkSess) };
   const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date, bannerSrc:bulkSess.banner||"" });
   const previewLabel = (t)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>{t}</label><span style={{fontSize:10,color:C.textFaint}}>sample data</span></div>);
 
