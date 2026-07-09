@@ -329,6 +329,46 @@ function renderTemplate(str, vars){
 
 const EMAIL_PLACEHOLDERS = ["name","email","session_title","session_date"];
 
+// ── Email banner: compress + CID embedding ──────────────────────────────────
+// A raw poster data-URL is far too large for an email body (and Gmail/Outlook
+// won't render data-URLs at all). So for email we downscale to a compact JPEG
+// and send it as a CID *attachment*: the body only carries <img src="cid:banner">
+// while the bytes ride along as an inline attachment.
+const EMAIL_BANNER_MAX_W = 600;      // px — plenty for a 480px-wide email card
+const EMAIL_BANNER_QUALITY = 0.72;   // JPEG quality
+const EMAIL_BANNER_MAX_B64 = 400 * 1024; // hard cap; skip banner beyond this
+
+// Returns { b64, mime } or null (never throws — email must still send).
+async function makeEmailBanner(dataUrl){
+  try{
+    if(!dataUrl || typeof document==="undefined") return null;
+    const img = await new Promise((res,rej)=>{
+      const i=new Image();
+      i.onload=()=>res(i); i.onerror=()=>rej(new Error("img load"));
+      i.src=dataUrl;
+    });
+    const nw=img.naturalWidth||img.width, nh=img.naturalHeight||img.height;
+    if(!nw||!nh) return null;
+    const scale=Math.min(1, EMAIL_BANNER_MAX_W/nw);
+    const w=Math.max(1,Math.round(nw*scale)), h=Math.max(1,Math.round(nh*scale));
+    const canvas=document.createElement("canvas");
+    canvas.width=w; canvas.height=h;
+    const ctx=canvas.getContext("2d");
+    if(!ctx) return null;
+    ctx.fillStyle="#1b3a5c"; ctx.fillRect(0,0,w,h); // flatten alpha onto brand navy
+    ctx.drawImage(img,0,0,w,h);
+    let out=canvas.toDataURL("image/jpeg", EMAIL_BANNER_QUALITY);
+    let b64=(out.split(",")[1])||"";
+    // If still too big, step quality down once more.
+    if(b64.length>EMAIL_BANNER_MAX_B64){
+      out=canvas.toDataURL("image/jpeg",0.55);
+      b64=(out.split(",")[1])||"";
+    }
+    if(!b64 || b64.length>EMAIL_BANNER_MAX_B64) return null; // give up; send without banner
+    return { b64, mime:"image/jpeg" };
+  }catch(e){ return null; }
+}
+
 // Wrap a message in the AI Ready branded email shell (matches app.jsx tokens).
 // Frosted glass, email-safely: a navy base with cyan accent glows, and a
 // translucent card. backdrop-filter gives real frost on WebKit clients (Apple
@@ -340,9 +380,15 @@ function buildBrandedEmail(opts){
   var eyebrow = o.eyebrow || "Shri Tech Partners";
   var sessionTitle = o.sessionTitle || "";
   var sessionDate = o.sessionDate || "";
-  // NOTE: banners are intentionally NOT embedded in emails. A data-URL banner
-  // exceeds the message size limit and would not render in Gmail/Outlook anyway.
-  // The banner still shows on the in-app registration page.
+  // bannerSrc: "cid:banner" when sending (image rides as an inline attachment),
+  // or a data-URL when rendering the in-app preview. Never embed a data-URL in a
+  // sent email — it blows the body-size limit and Gmail/Outlook won't render it.
+  var bannerSrc = o.bannerSrc || "";
+  var bannerRow = bannerSrc ? (
+    '<tr><td style="padding:22px 26px 0 26px;">' +
+      '<img src="' + bannerSrc + '" alt="' + sessionTitle + '" width="428" style="display:block;width:100%;max-width:428px;height:auto;border-radius:12px;border:1px solid rgba(255,255,255,0.12);" />' +
+    '</td></tr>'
+  ) : '';
   // Session detail — simple frost-glass panel (fonts kept; no cyan accent).
   var sessionCard = sessionTitle ? (
     '<tr><td style="padding:22px 26px 0 26px;">' +
@@ -368,6 +414,7 @@ function buildBrandedEmail(opts){
     '<tr><td style="padding:26px 26px 0 26px;"><p style="margin:0;font-family:monospace;font-size:11px;letter-spacing:2px;color:#00aeef;text-transform:uppercase;">' + eyebrow + '</p></td></tr>' +
     // body
     '<tr><td style="padding:16px 26px 0 26px;font-size:14px;color:rgba(255,255,255,0.82);line-height:1.7;">' + bodyHtml + '</td></tr>' +
+    bannerRow +
     sessionCard +
     // footer
     '<tr><td style="padding:24px 26px 0 26px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-top:1px solid rgba(0,174,239,0.15);padding-top:16px;"><p style="margin:0;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">You are receiving this because you registered with Shri Tech Partners.</p></td></tr></table></td></tr>' +
@@ -380,11 +427,11 @@ const DEFAULT_TEMPLATES = {
   confirmation: {
     enabled: false,
     subject: "You're registered for {{session_title}}",
-    body: "Hi {{name}},\n\nThanks for registering for {{session_title}} — your spot is confirmed.\n\nDate: {{session_date}}\n\nWe'll share the joining link with you soon. Looking forward to seeing you there!\n\nThanks,\nAnubhav"
+    body: "Hi {{name}},\n\nThanks for registering for {{session_title}} — your spot is confirmed.\nDate: {{session_date}}\nWe'll share the joining link with you soon. Looking forward to seeing you there!\n\nThanks, Anubhav"
   },
   bulk: {
     subject: "An update about {{session_title}}",
-    body: "Hi {{name}},\n\n(Write your message here.)"
+    body: "Hi {{name}},\n\nWe are all set to start the session. Please find the meeting link below:\nGoogle Meet : ~~link~~\n\nSee you at the workshop!!\n\nThanks,\nAnubhav"
   }
 };
 
@@ -484,8 +531,15 @@ function RegisterView(){
         const vars = { name:nm, email:norm, session_title:sess.title, session_date:sess.date||"" };
         const subject = renderTemplate(conf.subject, vars);
         const inner = renderTemplate(conf.body, vars).replace(/\n/g,"<br>");
-        const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"" });
-        postToAppsScript(emailCfg, { type:"confirmation", to_email:norm, to_name:nm, subject, html }).catch(()=>{});
+        // Compress the poster and attach it inline (CID) so it renders in mail
+        // clients without inflating the body past the size limit.
+        (async()=>{
+          const bn = sess.banner ? await makeEmailBanner(sess.banner) : null;
+          const html = buildBrandedEmail({ subject, bodyHtml:inner, eyebrow:"Registration confirmed", sessionTitle:sess.title, sessionDate:sess.date||"", bannerSrc: bn?"cid:banner":"" });
+          const payload = { type:"confirmation", to_email:norm, to_name:nm, subject, html };
+          if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
+          postToAppsScript(emailCfg, payload).catch(()=>{});
+        })();
       }
     }catch(e){ /* ignore — registration already saved */ }
     return true;
@@ -1657,8 +1711,11 @@ function EmailsTab({me,sessions,allRegs}){
     const vars={ name:"Test User", email:testTo.trim(), session_title:"Sample Session", session_date:"1 Jan 2026 · 10:00 AM" };
     const subject=renderTemplate(cSubject,vars);
     const inner=renderTemplate(cBody,vars).replace(/\n/g,"<br>");
-    const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Registration confirmed",sessionTitle:vars.session_title,sessionDate:vars.session_date});
-    try{ await postToAppsScript({url:cfgUrl},{type:"confirmation",to_email:testTo.trim(),to_name:"Test User",subject,html}); await logActivity(me?.name,"Sent confirmation test email",testTo.trim());
+    const bn = (sessions[0]&&sessions[0].banner) ? await makeEmailBanner(sessions[0].banner) : null;
+    const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Registration confirmed",sessionTitle:vars.session_title,sessionDate:vars.session_date,bannerSrc:bn?"cid:banner":""});
+    const payload={type:"confirmation",to_email:testTo.trim(),to_name:"Test User",subject,html};
+    if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
+    try{ await postToAppsScript({url:cfgUrl},payload); await logActivity(me?.name,"Sent confirmation test email",testTo.trim());
       setTestMsg("Test dispatched to "+testTo.trim()+". Delivery can't be confirmed from the browser — check your Apps Script executions.");
     }catch(e){ setCErr("Could not dispatch the test."); }
     setTestBusy(false);
@@ -1673,14 +1730,17 @@ function EmailsTab({me,sessions,allRegs}){
     const next={...tpl, bulk:{subject:bSubject,body:bBody}};
     await safeSave(EMAIL_TEMPLATES_KEY,next); setTpl(next);
     const sess=sessions.find(s=>s.id===bSid);
+    const bn = (sess&&sess.banner) ? await makeEmailBanner(sess.banner) : null; // compress once, reuse per recipient
     setSending(true); setProgress({done:0,total:targets.length});
     for(let i=0;i<targets.length;i++){
       const r=targets[i];
       const vars={ name:r.name, email:r.email, session_title:(sess&&sess.title)||"", session_date:(sess&&sess.date)||"" };
       const subject=renderTemplate(bSubject,vars);
       const inner=renderTemplate(bBody,vars).replace(/\n/g,"<br>");
-      const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date});
-      try{ await postToAppsScript({url:cfgUrl},{type:"bulk",to_email:r.email,to_name:r.name,subject,html}); }catch(e){}
+      const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date,bannerSrc:bn?"cid:banner":""});
+      const payload={type:"bulk",to_email:r.email,to_name:r.name,subject,html};
+      if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
+      try{ await postToAppsScript({url:cfgUrl},payload); }catch(e){}
       setProgress({done:i+1,total:targets.length});
       await new Promise(res=>setTimeout(res,250)); // gentle pacing for Apps Script quotas
     }
@@ -1702,10 +1762,10 @@ function EmailsTab({me,sessions,allRegs}){
   // Live previews (sample data filled into placeholders, wrapped in brand shell)
   const sampleSess = sessions[0] || {};
   const confVars = { name:"Ada Lovelace", email:"ada@example.com", session_title:sampleSess.title||"AI Basics for Teams", session_date:sampleSess.date||"15 Aug 2026 · 3:00 PM IST" };
-  const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date });
+  const confPreview = buildBrandedEmail({ subject:renderTemplate(cSubject,confVars), bodyHtml:renderTemplate(cBody,confVars).replace(/\n/g,"<br>"), eyebrow:"Registration confirmed", sessionTitle:confVars.session_title, sessionDate:confVars.session_date, bannerSrc:sampleSess.banner||"" });
   const bulkSess = sessions.find(s=>s.id===bSid) || {};
   const bulkVars = { name:(recips[0]&&recips[0].name)||"Ada Lovelace", email:(recips[0]&&recips[0].email)||"ada@example.com", session_title:bulkSess.title||"", session_date:bulkSess.date||"" };
-  const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date });
+  const bulkPreview = buildBrandedEmail({ subject:renderTemplate(bSubject,bulkVars), bodyHtml:renderTemplate(bBody,bulkVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:bulkVars.session_title, sessionDate:bulkVars.session_date, bannerSrc:bulkSess.banner||"" });
   const previewLabel = (t)=>(<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}><label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>{t}</label><span style={{fontSize:10,color:C.textFaint}}>sample data</span></div>);
 
   return(
