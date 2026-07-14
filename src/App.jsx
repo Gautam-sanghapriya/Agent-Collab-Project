@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   Check, AlertCircle, Loader2, Download, Users, ClipboardList,
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
-  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send, Image as ImageIcon, UploadCloud
+  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send, Image as ImageIcon, UploadCloud, Clock
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./utils/supabase";
 
@@ -13,6 +13,7 @@ const regKey = (sid) => `ai-ready-reg-1782870003-${sid}`;
 const BOOTSTRAP_PASSCODE = "aiready2026";
 const EMAIL_CFG_KEY  = "ai-ready-emailcfg-1782870003";
 const EMAIL_TEMPLATES_KEY = "ai-ready-emailtpl-1782870003";
+const EMAIL_SCHEDULES_KEY = "ai-ready-emailsched-1782870003";
 const ADMIN_SESSION_KEY = "ai-ready-adminsession-1782870003";
 const ACTIVITY_KEY = "ai-ready-activity-1782870003";
 const ACTIVITY_MAX = 500; // keep the most recent N entries
@@ -358,6 +359,26 @@ function endsBeforeStart(start,end){
   const ad=new Date(+a.year,MON.indexOf(a.mon),+a.day).getTime()+to24(a.time)*60000;
   const bd=new Date(+b.year,MON.indexOf(b.mon),+b.day).getTime()+to24(b.time)*60000;
   return bd < ad;
+}
+
+// UTC offsets (hours) for the picker's timezone abbreviations. Fixed offsets:
+// DST is expressed by distinct abbreviations (EST vs EDT), matching the picker.
+const TZ_OFFSETS = { IST:5.5, UTC:0, GMT:0, BST:1, CET:1, CEST:2, EET:2, GST:4, SGT:8, HKT:8, JST:9, KST:9, AEST:10, AEDT:11, NZST:12, EST:-5, EDT:-4, CST:-6, CDT:-5, MST:-7, MDT:-6, PST:-8, PDT:-7, BRT:-3 };
+// "15 Aug 2026 · 3:00 PM IST" -> UTC epoch ms (null if unparseable).
+function epochFromWhen(s){
+  const p = parseWhen(s);
+  if(!p) return null;
+  const m=/^(\d{1,2}):(\d{2}) (AM|PM)$/.exec(p.time);
+  let h=+m[1]%12; if(m[3]==="PM") h+=12;
+  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const utc=Date.UTC(+p.year, MON.indexOf(p.mon), +p.day, h, +m[2]);
+  const off=TZ_OFFSETS[p.tz] ?? 0;
+  return utc - off*3600000;
+}
+// Like renderTemplate, but only replaces keys present in vars — unknown
+// placeholders (e.g. person fields) are left intact for later substitution.
+function renderPartial(str, vars){
+  return String(str==null?"":str).replace(/\{\{(\w+)\}\}/g, (m,k)=> (vars[k]!=null ? String(vars[k]) : m));
 }
 
 // Replace {{name}}, {{email}}, {{session_title}}, {{session_date}} etc.
@@ -1748,6 +1769,193 @@ function ActivityTab({me,isSuper}){
   );
 }
 
+
+// ── Scheduled emails ─────────────────────────────────────────────────────────
+// Schedules live in two places by design: app storage (for this editable list)
+// and the Apps Script's Script Properties (what actually fires). Every save or
+// delete here also posts the change to the Apps Script. The browser cannot read
+// the script's responses, so past-due status reads "Sent" on trust — the
+// Executions log is the source of truth.
+function ScheduledEmails({me,sessions,allRegs,cfgUrl}){
+  const [list,setList]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [formOpen,setFormOpen]=useState(false);
+  const [editId,setEditId]=useState(null);
+  const [sid,setSid]=useState(sessions[0]?.id||"");
+  const [subject,setSubject]=useState("");
+  const [body,setBody]=useState("");
+  const [when,setWhen]=useState("");
+  const [checked,setChecked]=useState(()=>new Set());
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(""); const [err,setErr]=useState("");
+  const [confDel,setConfDel]=useState(null);
+
+  useEffect(()=>{(async()=>{
+    const r=await safeGet(EMAIL_SCHEDULES_KEY);
+    if(r){ try{ setList(JSON.parse(r.value)); }catch(e){} }
+    setLoaded(true);
+  })();},[]);
+
+  const regs = allRegs[sid] || [];
+  useEffect(()=>{ if(!editId) setChecked(new Set()); },[sid]);
+  const allChecked = regs.length>0 && checked.size===regs.length;
+
+  const persist=async(next)=>{ const ok=await safeSave(EMAIL_SCHEDULES_KEY,next); if(ok) setList(next); return ok; };
+
+  const openNew=()=>{ setEditId(null); setSid(sessions[0]?.id||""); setSubject(""); setBody(""); setWhen(""); setChecked(new Set()); setErr(""); setMsg(""); setFormOpen(true); };
+  const openEdit=(s)=>{ setEditId(s.id); setSid(s.sid); setSubject(s.subject); setBody(s.body); setWhen(s.when); setChecked(new Set(s.recipients)); setErr(""); setMsg(""); setFormOpen(true); setConfDel(null); };
+  const closeForm=()=>{ setFormOpen(false); setEditId(null); };
+
+  const saveSchedule=async()=>{
+    setErr(""); setMsg("");
+    if(!cfgUrl){ setErr("Configure the Apps Script URL in Settings first."); return; }
+    if(!subject.trim()||!body.trim()){ setErr("Subject and body are required."); return; }
+    const runAt=epochFromWhen(when);
+    if(!runAt){ setErr("Pick a valid date & time."); return; }
+    if(runAt <= Date.now()){ setErr("The scheduled time must be in the future."); return; }
+    const sess=sessions.find(x=>x.id===sid);
+    const targets=regs.filter(r=>checked.has(r.email));
+    if(targets.length===0){ setErr("Select at least one recipient."); return; }
+    setBusy(true);
+    // Session vars are substituted now; person placeholders stay in the
+    // template and are filled per-recipient by the Apps Script at send time.
+    const sessVars={ session_title:(sess&&sess.title)||"", session_date:sessionWhen(sess) };
+    const subjectTpl=renderPartial(subject,sessVars);
+    const htmlTpl=buildBrandedEmail({ subject:subjectTpl, bodyHtml:renderPartial(body,sessVars).replace(/\n/g,"<br>"), eyebrow:"Announcement", sessionTitle:sessVars.session_title, sessionDate:sessVars.session_date });
+    const recipients=targets.map(r=>personVars(r));
+    const id=editId||uid();
+    try{
+      await postToAppsScript({url:cfgUrl},{ type:"schedule_upsert", id, run_at:String(runAt), subject:subjectTpl, html:htmlTpl, recipients:JSON.stringify(recipients) });
+      const rec={ id, sid, sessionTitle:(sess&&sess.title)||"", when, runAt, subject, body, recipients:targets.map(r=>r.email), updatedAt:new Date().toISOString() };
+      const next = editId ? list.map(x=>x.id===editId?rec:x) : [...list,rec];
+      await persist(next);
+      await logActivity(me?.name, editId?"Updated email schedule":"Created email schedule", `${rec.sessionTitle} · ${when} · ${targets.length} recipient(s)`);
+      setMsg(editId?"Schedule updated and synced to the Apps Script.":"Schedule saved and synced to the Apps Script.");
+      closeForm();
+    }catch(e){ setErr("Could not sync the schedule: "+(e.message||"unknown error")); }
+    setBusy(false);
+  };
+
+  const deleteSchedule=async(s)=>{
+    setBusy(true); setErr("");
+    try{
+      await postToAppsScript({url:cfgUrl},{ type:"schedule_delete", id:s.id });
+      await persist(list.filter(x=>x.id!==s.id));
+      await logActivity(me?.name,"Deleted email schedule",`${s.sessionTitle} · ${s.when}`);
+      setConfDel(null);
+    }catch(e){ setErr("Could not delete: "+(e.message||"unknown error")); }
+    setBusy(false);
+  };
+
+  const fmtRun=(s)=> s.when || new Date(s.runAt).toLocaleString();
+  const chip=(s)=>{
+    const due = s.runAt <= Date.now();
+    return <span style={{fontSize:10,fontFamily:"monospace",fontWeight:700,borderRadius:4,padding:"2px 8px",color:due?C.success:C.warn,background:due?`${C.success}1A`:`${C.warn}1A`}}>{due?"SENT":"PENDING"}</span>;
+  };
+
+  const dis = busy||!cfgUrl;
+  return(
+    <div style={{...glass,padding:24,display:"grid",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <Clock size={16} color={C.accent}/>
+          <p style={{fontSize:13,fontWeight:600,color:C.textDim,margin:0}}>Scheduled emails</p>
+        </div>
+        <button data-testid="sched-new-btn" onClick={()=>formOpen?closeForm():openNew()} onMouseEnter={e=>{if(cfgUrl)ctaHover(e);}} onMouseLeave={ctaLeave} disabled={!cfgUrl}
+          style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:12,border:"none",borderRadius:12,padding:"7px 12px",cursor:cfgUrl?"pointer":"default",opacity:cfgUrl?1:.5,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          {formOpen?<>Close</>:<><Plus size={13}/>New schedule</>}
+        </button>
+      </div>
+      <p style={{fontSize:12,color:C.textFaint,lineHeight:1.6,margin:0}}>
+        Emails are sent automatically at the scheduled time by your Apps Script — the app doesn't need to be open.
+        Times fire within ~5 minutes of the target. Session posters are not included in scheduled sends.
+        Delivery can be verified in the Apps Script → Executions log.
+      </p>
+
+      {!loaded ? <p style={{fontSize:12,color:C.textFaint}}>Loading…</p> : list.length===0 && !formOpen ? (
+        <div style={{textAlign:"center",padding:"22px 0",border:`1px dashed ${C.border}`,borderRadius:12,color:C.textFaint,fontSize:13}}>No schedules yet.</div>
+      ) : (
+        <div style={{display:"grid",gap:8}}>
+          {list.slice().sort((a,b)=>a.runAt-b.runAt).map(s=>(
+            <div key={s.id} data-testid={"sched-row-"+s.id} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${editId===s.id?C.accent+"99":C.border}`,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                  {chip(s)}
+                  <span style={{fontSize:12,fontFamily:"monospace",color:C.text}}>{fmtRun(s)}</span>
+                </div>
+                <p style={{fontSize:13,fontWeight:600,margin:"0 0 2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.subject}</p>
+                <p style={{fontSize:11,color:C.textFaint,margin:0}}>{s.sessionTitle} · {s.recipients.length} recipient{s.recipients.length!==1?"s":""}</p>
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                <button data-testid={"sched-edit-"+s.id} onClick={()=>openEdit(s)} disabled={dis} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"5px 7px",cursor:dis?"default":"pointer",display:"flex"}} title="Edit schedule"><Pencil size={13}/></button>
+                {confDel===s.id?(
+                  <><span style={{fontSize:12,color:C.error}}>Delete?</span>
+                  <button data-testid={"sched-del-confirm-"+s.id} onClick={()=>deleteSchedule(s)} disabled={dis} style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:6,padding:"4px 10px",cursor:dis?"default":"pointer"}}>Confirm</button>
+                  <button onClick={()=>setConfDel(null)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button></>
+                ):(
+                  <button data-testid={"sched-del-"+s.id} onClick={()=>{setConfDel(s.id);}} disabled={dis} style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"5px 7px",cursor:dis?"default":"pointer",display:"flex"}}><Trash2 size={13}/></button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {formOpen&&(
+        <div style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:12,padding:16,display:"grid",gap:10}}>
+          <p style={{fontSize:13,fontWeight:600,color:C.textDim,margin:0}}>{editId?"Edit schedule":"New schedule"}</p>
+          <div>
+            <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION</label>
+            <select data-testid="sched-session" value={sid} onChange={e=>setSid(e.target.value)} style={{width:"100%",background:"rgba(255,255,255,0.07)",border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:C.text,outline:"none",cursor:"pointer",marginTop:5}}>
+              {sessions.map(s=><option key={s.id} value={s.id} style={{background:C.bgPanel}}>{s.title} [{s.id}]</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SEND AT</label>
+            <div style={{marginTop:5}}><DateTimePicker testid="sched-when" value={when} onChange={setWhen} placeholder="e.g. 20 Aug 2026 · 9:00 AM IST"/></div>
+          </div>
+          <div>
+            <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SUBJECT</label>
+            <input data-testid="sched-subject" value={subject} onChange={e=>setSubject(e.target.value)} placeholder="An update about {{session_title}}" style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+          </div>
+          <div>
+            <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BODY</label>
+            <textarea className="rfs" data-testid="sched-body" value={body} onChange={e=>setBody(e.target.value)} rows={5} placeholder="Hi {{first_name}}, ..." style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit"}} onFocus={fi} onBlur={fo}/>
+            <p style={{fontSize:11,color:C.textFaint,margin:"6px 0 0"}}>Placeholders: {EMAIL_PLACEHOLDERS.map(p=>(<span key={p} style={{fontFamily:"monospace",color:C.accent,marginRight:8}}>{`{{${p}}}`}</span>))}</p>
+          </div>
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>RECIPIENTS</label>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:C.textDim,cursor:regs.length?"pointer":"default"}}>
+                <input data-testid="sched-select-all" type="checkbox" checked={allChecked} onChange={()=>setChecked(allChecked?new Set():new Set(regs.map(r=>r.email)))} disabled={regs.length===0} style={{accentColor:C.accent,width:14,height:14}}/>
+                Select all <span style={{color:C.textFaint}}>({checked.size}/{regs.length})</span>
+              </label>
+            </div>
+            <div className="rfs" style={{maxHeight:180,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10,background:"rgba(255,255,255,0.03)"}}>
+              {regs.length===0?(
+                <p style={{fontSize:12,color:C.textFaint,textAlign:"center",padding:"14px 0",margin:0}}>No registrants for this session.</p>
+              ):regs.map(r=>(
+                <label key={r.email} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:`1px solid ${C.border}`,fontSize:12,color:C.textDim,cursor:"pointer"}}>
+                  <input data-testid={"sched-recip-"+r.email} type="checkbox" checked={checked.has(r.email)} onChange={()=>setChecked(prev=>{const n=new Set(prev);n.has(r.email)?n.delete(r.email):n.add(r.email);return n;})} style={{accentColor:C.accent,width:14,height:14}}/>
+                  <span style={{color:C.text,fontWeight:600}}>{r.name}</span> {r.email}
+                </label>
+              ))}
+            </div>
+          </div>
+          {err&&<p style={{fontSize:12,color:C.error,margin:0}}>{err}</p>}
+          <div style={{display:"flex",gap:8}}>
+            <button data-testid="sched-save-btn" onClick={saveSchedule} disabled={dis} onMouseEnter={e=>{if(!dis)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"9px 14px",cursor:dis?"default":"pointer",opacity:dis?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+              {busy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:(editId?"Update schedule":"Save schedule")}
+            </button>
+            <button onClick={closeForm} onMouseEnter={secHover} onMouseLeave={secLeave} style={{background:"transparent",color:C.textFaint,border:`1px solid ${C.border}`,borderRadius:12,padding:"9px 12px",cursor:"pointer",fontSize:13,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {msg&&<p style={{fontSize:12,color:C.success,margin:0}}>{msg}</p>}
+    </div>
+  );
+}
+
 function EmailsTab({me,sessions,allRegs}){
   const [loading,setLoading]=useState(true);
   const [cfgUrl,setCfgUrl]=useState("");
@@ -2048,6 +2256,9 @@ function EmailsTab({me,sessions,allRegs}){
           {sending?<><Loader2 size={14} className="animate-spin"/>Sending {progress.done}/{progress.total}...</>:<><Send size={14}/>Send to {checked.size} selected</>}
         </button>
       </div>
+
+      {/* ── Scheduled emails ── */}
+      <ScheduledEmails me={me} sessions={sessions} allRegs={allRegs} cfgUrl={cfgUrl}/>
     </div>
   );
 }
