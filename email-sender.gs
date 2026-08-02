@@ -4,6 +4,12 @@
  *   • doGet  — OTP verification emails (fired as an <img> GET)
  *   • doPost — confirmation + bulk emails (subject/body configured in the app)
  *
+ * ATTACHMENTS (bulk email only): the app can upload a .zip to Supabase
+ * Storage and send its public URL along as `materials_url` (+ `materials_name`
+ * for the filename). This script fetches that URL itself and attaches the
+ * real bytes to the email — the browser never sends the file's bytes over
+ * the wire more than once, regardless of how many recipients there are.
+ *
  * DEPLOY:
  *   1. https://script.google.com → paste this file.
  *   2. Deploy → New deployment → "Web app"
@@ -62,10 +68,10 @@ function doGet(e) {
 function doPost(e) {
   var p = (e && e.parameter) || {};
   var remaining = MailApp.getRemainingDailyQuota();
-  Logger.log('doPost type=%s to=%s quotaLeft=%s', p.type || 'email', p.to_email, remaining);
+  Logger.log('doPost type=%s to=%s quotaLeft=%s attachment=%s', p.type || 'email', p.to_email, remaining, p.materials_url ? 'yes' : 'no');
   try {
     if (!p.to_email || !p.subject) return _ok('missing params');
-    _send(p.to_email, p.subject, p.html || p.body || '');
+    _send(p.to_email, p.subject, p.html || p.body || '', p.materials_url, p.materials_name);
     return _ok('sent:' + (p.type || 'email'));
   } catch (err) {
     Logger.log('doPost SEND FAILED: ' + err);
@@ -74,12 +80,37 @@ function doPost(e) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function _send(to, subject, html) {
+function _send(to, subject, html, attachmentUrl, attachmentName) {
   if (MailApp.getRemainingDailyQuota() <= 0) {
     throw new Error('Daily email quota exhausted — cannot send to ' + to);
   }
-  MailApp.sendEmail({ to: to, subject: subject, htmlBody: html, name: 'AI Ready' });
-  Logger.log('Sent to ' + to);
+  var options = { to: to, subject: subject, htmlBody: html, name: 'AI Ready' };
+  if (attachmentUrl) {
+    var blob = _fetchAttachment(attachmentUrl, attachmentName);
+    if (blob) options.attachments = [blob];
+  }
+  MailApp.sendEmail(options);
+  Logger.log('Sent to ' + to + (options.attachments ? ' (with attachment)' : ''));
+}
+
+// Fetches a file from a public URL (e.g. a Supabase Storage public URL) and
+// returns it as a Blob ready for MailApp's `attachments`. Never throws — if
+// the fetch fails, the email still sends, just without the attachment; the
+// reason is logged so it's visible in Executions.
+function _fetchAttachment(url, name) {
+  try {
+    var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() >= 300) {
+      Logger.log('Attachment fetch failed (' + res.getResponseCode() + ') for ' + url);
+      return null;
+    }
+    var blob = res.getBlob();
+    if (name) blob.setName(name);
+    return blob;
+  } catch (err) {
+    Logger.log('Attachment fetch threw: ' + err);
+    return null;
+  }
 }
 
 function _ok(msg) {
