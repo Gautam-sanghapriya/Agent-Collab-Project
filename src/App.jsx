@@ -1984,6 +1984,15 @@ function EmailsTab({me,sessions,allRegs}){
   const [progress,setProgress]=useState({done:0,total:0});
   const [bMsg,setBMsg]=useState(""); const [bErr,setBErr]=useState("");
 
+  // Bulk email attachment — uploaded once to Supabase Storage; every
+  // recipient's send then just carries the resulting URL (not the file
+  // itself). email-sender.gs fetches it server-side and attaches the real
+  // bytes per email. Requires a "materials" Storage bucket in Supabase.
+  const [matFile,setMatFile]=useState(null);   // {name,size} once uploaded
+  const [matUrl,setMatUrl]=useState("");        // public Storage URL
+  const [matUploading,setMatUploading]=useState(false);
+  const [matErr,setMatErr]=useState("");
+
   useEffect(()=>{(async()=>{
     const er=await safeGet(EMAIL_CFG_KEY); if(er){ try{ const cfg=JSON.parse(er.value); setCfgUrl(cfg.url||""); setOtpOn(!!cfg.otpRequired); }catch(e){} }
     const tr=await safeGet(EMAIL_TEMPLATES_KEY);
@@ -2002,6 +2011,32 @@ function EmailsTab({me,sessions,allRegs}){
   const allChecked = recips.length>0 && checked.size===recips.length;
   const toggleAll=()=> setChecked(allChecked ? new Set() : new Set(recips.map(r=>r.email)));
   const toggleOne=(email)=> setChecked(prev=>{ const n=new Set(prev); n.has(email)?n.delete(email):n.add(email); return n; });
+
+  const MATERIALS_BUCKET = "materials";
+  const attachMaterials = async (file) => {
+    setMatErr(""); setMatUrl(""); setMatFile(null);
+    if(!file) return;
+    if(!isSupabaseConfigured || !supabase){ setMatErr("Supabase must be configured to attach files — see Supabase setup in the README."); return; }
+    if(!/\.zip$/i.test(file.name)){ setMatErr("Attach a single .zip file."); return; }
+    // Gmail's real ceiling is ~25MB per email (confirmed via testing: MailApp
+    // throws "Limit Exceeded: Email Total Attachments Size" beyond that). Warn
+    // well under it so there's headroom for the rest of the message.
+    if(file.size > 20*1024*1024){ setMatErr("Keep the zip under 20MB — Gmail rejects the whole email past roughly 25MB, and this leaves headroom for the message itself."); return; }
+    setMatUploading(true);
+    try{
+      const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await supabase.storage.from(MATERIALS_BUCKET).upload(path, file, { upsert:true, contentType: file.type || "application/zip" });
+      if(upErr) throw upErr;
+      const { data } = supabase.storage.from(MATERIALS_BUCKET).getPublicUrl(path);
+      if(!data || !data.publicUrl) throw new Error("Could not get a public URL for the upload.");
+      setMatUrl(data.publicUrl); setMatFile({ name: file.name, size: file.size });
+      await logActivity(me?.name, "Attached bulk email materials", file.name);
+    }catch(e){
+      setMatErr('Upload failed: '+(e.message||"unknown error")+'. Make sure a "'+MATERIALS_BUCKET+'" Storage bucket exists in Supabase and allows uploads.');
+    }
+    setMatUploading(false);
+  };
+  const removeMaterials = () => { setMatFile(null); setMatUrl(""); setMatErr(""); };
 
   const toggleOtp=async()=>{
     setOtpErr("");
@@ -2077,13 +2112,14 @@ function EmailsTab({me,sessions,allRegs}){
       const html=buildBrandedEmail({subject,bodyHtml:inner,eyebrow:"Announcement",sessionTitle:vars.session_title,sessionDate:vars.session_date,bannerSrc:bn?"cid:banner":""});
       const payload={type:"bulk",to_email:r.email,to_name:r.name,subject,html};
       if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
+      if(matUrl){ payload.materials_url=matUrl; payload.materials_name=(matFile&&matFile.name)||"materials.zip"; }
       try{ await postToAppsScript({url:cfgUrl},payload); }catch(e){}
       setProgress({done:i+1,total:targets.length});
       await new Promise(res=>setTimeout(res,250)); // gentle pacing for Apps Script quotas
     }
-    await logActivity(me?.name,"Sent bulk email",`${targets.length} recipient(s) · ${sess?sess.title:bSid}`);
+    await logActivity(me?.name,"Sent bulk email",`${targets.length} recipient(s) · ${sess?sess.title:bSid}${matUrl?" · with attachment":""}`);
     setSending(false);
-    setBMsg(`Dispatched ${targets.length} email(s). Delivery can't be confirmed from the browser — check your Apps Script executions.`);
+    setBMsg(`Dispatched ${targets.length} email(s)${matUrl?` with "${(matFile&&matFile.name)||"materials.zip"}" attached`:""}. Delivery can't be confirmed from the browser — check your Apps Script executions.`);
   };
 
   const sec={...glass,padding:24,display:"grid",gap:12};
@@ -2198,6 +2234,26 @@ function EmailsTab({me,sessions,allRegs}){
           <p style={slbl}>Bulk email</p>
         </div>
         <p style={{fontSize:12,color:C.textFaint,margin:0,lineHeight:1.6}}>Compose a message and send it to the registrants you select below.</p>
+
+        <div style={{border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px 14px",display:"grid",gap:8}}>
+          <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>ATTACHMENT (OPTIONAL)</label>
+          {!matFile ? (
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:C.textDim,background:"rgba(255,255,255,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",cursor:matUploading?"default":"pointer"}}>
+                {matUploading?<Loader2 size={13} className="animate-spin"/>:<UploadCloud size={13}/>}
+                {matUploading?"Uploading...":"Choose a .zip file"}
+                <input data-testid="bulk-materials-input" type="file" accept=".zip" disabled={matUploading} onChange={e=>attachMaterials(e.target.files&&e.target.files[0])} style={{display:"none"}}/>
+              </label>
+              <span style={{fontSize:11,color:C.textFaint}}>Sent to every recipient as a real attachment, not a link.</span>
+            </div>
+          ):(
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"rgba(52,211,153,0.08)",border:"1px solid rgba(52,211,153,0.3)",borderRadius:10,padding:"8px 12px"}}>
+              <span style={{fontSize:12,color:C.text,display:"flex",alignItems:"center",gap:6}}><Check size={13} color={C.success}/>{matFile.name} ({(matFile.size/1024/1024).toFixed(1)} MB)</span>
+              <button data-testid="bulk-materials-remove" onClick={removeMaterials} title="Remove attachment" style={{background:"transparent",border:"none",color:C.textFaint,cursor:"pointer",display:"flex"}}><X size={14}/></button>
+            </div>
+          )}
+          {matErr&&<p style={{fontSize:11,color:C.error,margin:0}}>{matErr}</p>}
+        </div>
 
         <div>
           <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION</label>
