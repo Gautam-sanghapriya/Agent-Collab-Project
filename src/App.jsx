@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   Check, AlertCircle, Loader2, Download, Users, ClipboardList,
   ShieldCheck, Search, Pencil, Trash2, X, ArrowUp, ArrowDown,
-  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send, Image as ImageIcon, UploadCloud, Clock
+  ArrowUpDown, Plus, Calendar, LogOut, Mail, Send, Image as ImageIcon, UploadCloud, Clock,
+  Star, MessageSquare
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./utils/supabase";
 
@@ -18,15 +19,29 @@ const ADMIN_SESSION_KEY = "ai-ready-adminsession-1782870003";
 const ACTIVITY_KEY = "ai-ready-activity-1782870003";
 const ACTIVITY_MAX = 500; // keep the most recent N entries
 
+// ── Post-session feedback ───────────────────────────────────────────────────
+// Responses, one array per session.
+const fbKey    = (sid) => `ai-ready-feedback-1782870003-${sid}`;
+// Per-attendee link tokens for a session: { "email": "token", ... }
+const fbTokKey = (sid) => `ai-ready-fbtok-1782870003-${sid}`;
+// Public base URL of the deployed app. Feedback links in emails are built from
+// it. Kept in its own key so nothing that rewrites EMAIL_CFG_KEY can clobber it.
+const SITE_URL_KEY   = "ai-ready-siteurl-1782870003";
+// The feedback email template also lives on its own key rather than inside
+// EMAIL_TEMPLATES_KEY, so a save from the Emails tab (which writes that whole
+// object from state loaded at mount) can't drop it.
+const FEEDBACK_TPL_KEY = "ai-ready-feedbacktpl-1782870003";
+
 // Feature permissions the superuser can grant to other admins.
 const PERMISSIONS = [
   ["sessions",      "Manage sessions",        "Create, edit, activate/deactivate and delete sessions"],
   ["registrations", "Manage registrations",   "View, edit, delete and export registrants"],
   ["activity",      "View activity log",       "See the admin audit trail"],
   ["emails",        "Manage emails",           "Configure confirmation emails and send bulk emails"],
+  ["feedback",      "View feedback",           "Read and export session feedback responses"],
   ["settings",      "Email / OTP settings",    "Configure the Apps Script URL and OTP verification"],
 ];
-const DEFAULT_PERMS = { sessions:true, registrations:true, activity:true, emails:false, settings:false };
+const DEFAULT_PERMS = { sessions:true, registrations:true, activity:true, emails:false, feedback:true, settings:false };
 
 // The bootstrap owner is the superuser. Legacy data may predate the `super`
 // flag, so if nobody is flagged, the first admin in the list is treated as super.
@@ -140,6 +155,13 @@ async function logActivity(actor, action, detail){
 
 export default function App(){
   const [view,setView]=useState("register");
+  // Attendees arrive on #/feedback?... straight from the emailed link.
+  const [fbRoute,setFbRoute]=useState(readFeedbackRoute);
+  useEffect(()=>{
+    const onHash=()=>setFbRoute(readFeedbackRoute());
+    window.addEventListener("hashchange",onHash);
+    return ()=>window.removeEventListener("hashchange",onHash);
+  },[]);
   return(
     <div style={{minHeight:"100vh",width:"100%",background:C.bg,color:C.text,display:"flex",flexDirection:"column",fontFamily:"Arial, Helvetica, sans-serif",position:"relative",overflow:"hidden"}}>
       <style>{`*,*::before,*::after{box-sizing:border-box}@media (max-width:640px){.rpad{padding:20px 16px !important}}
@@ -166,13 +188,17 @@ export default function App(){
               <div style={{width:8,height:8,borderRadius:"50%",background:C.accent}}/>
               <span style={{fontFamily:"monospace",fontSize:12,letterSpacing:"0.15em",color:C.textFaint,textTransform:"uppercase"}}>Shri Tech Partners</span>
             </div>
+            {!fbRoute&&(
             <button data-testid="toggle-view" onClick={()=>setView(v=>v==="register"?"admin":"register")} style={{fontFamily:"monospace",fontSize:12,color:C.textFaint,background:"transparent",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               {view==="register"?<><ShieldCheck size={14}/>Admin</>:<>← Registration</>}
             </button>
+            )}
           </div>
         </div>
         <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"48px 16px 32px"}}>
-          {view==="register"?<RegisterView/>:<AdminView/>}
+          {fbRoute
+            ? <FeedbackView sid={fbRoute.sid} email={fbRoute.email} token={fbRoute.token}/>
+            : (view==="register"?<RegisterView/>:<AdminView/>)}
         </div>
         <div style={{textAlign:"center",paddingBottom:20,fontSize:10,fontFamily:"monospace",color:C.textFaint}}>
           Registrations are stored securely and never shared with third parties.
@@ -397,6 +423,104 @@ function personVars(reg){
   const last =(reg&&reg.lastName ||"").trim() || (parts.length>1?parts.slice(1).join(" "):"");
   return { name: full || [first,last].filter(Boolean).join(" "), first_name:first, last_name:last, role:(reg&&reg.role||"").trim(), email:(reg&&reg.email||"").trim() };
 }
+
+// ── Feedback links ──────────────────────────────────────────────────────────
+// The feedback page is a hash route (#/feedback?...) rather than a path. Hash
+// routing needs no server rewrite rules, so it works as-is on Vercel, Netlify
+// and Cloudflare Pages, and survives a refresh.
+
+const FEEDBACK_PLACEHOLDERS = ["name","first_name","last_name","role","email","session_title","session_date","feedback_link"];
+
+// URL-safe base64, unicode-safe in both directions.
+function b64urlEnc(str){
+  try{
+    const bytes = new TextEncoder().encode(String(str==null?"":str));
+    let bin = ""; bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  }catch(e){ return ""; }
+}
+function b64urlDec(str){
+  try{
+    const t = String(str||"").replace(/-/g,"+").replace(/_/g,"/");
+    const pad = t.length % 4 ? "=".repeat(4 - (t.length % 4)) : "";
+    const bin = atob(t + pad);
+    const bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }catch(e){ return ""; }
+}
+
+// Returns null unless the current hash is a feedback link.
+//   #/feedback?s=<sessionId>&e=<base64url email>&t=<token>
+function readFeedbackRoute(){
+  try{
+    const h = (typeof window !== "undefined" && window.location.hash) || "";
+    if(!/^#\/feedback(\?|$)/.test(h)) return null;
+    const qi = h.indexOf("?");
+    const p  = new URLSearchParams(qi >= 0 ? h.slice(qi+1) : "");
+    return {
+      sid:   p.get("s") || "",
+      email: b64urlDec(p.get("e") || "").trim().toLowerCase(),
+      token: p.get("t") || "",
+    };
+  }catch(e){ return null; }
+}
+
+function buildFeedbackLink(siteUrl, sid, email, token){
+  const base = String(siteUrl||"").trim().replace(/[#?].*$/,"").replace(/\/+$/,"");
+  const qs = `s=${encodeURIComponent(sid)}&e=${b64urlEnc(email)}` + (token?`&t=${encodeURIComponent(token)}`:"");
+  return `${base}/#/feedback?${qs}`;
+}
+
+// {{feedback_link}} becomes a real button, with a pasteable URL underneath for
+// clients that strip button styling.
+function feedbackCtaHtml(url){
+  const safe = String(url||"").replace(/"/g,"&quot;");
+  return '' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 12px 0;"><tr>' +
+      '<td bgcolor="#00aeef" style="border-radius:12px;">' +
+        '<a href="' + safe + '" target="_blank" style="display:inline-block;padding:12px 22px;font-family:Helvetica,Arial,sans-serif;font-size:14px;font-weight:700;color:#1b3a5c;text-decoration:none;border-radius:12px;">Share your feedback</a>' +
+      '</td>' +
+    '</tr></table>' +
+    '<p style="margin:0;font-size:12px;color:rgba(255,255,255,0.45);line-height:1.6;">Button not working? Paste this into your browser:<br>' +
+    '<a href="' + safe + '" style="color:#00aeef;word-break:break-all;">' + safe + '</a></p>';
+}
+
+async function loadSiteUrl(){
+  try{
+    const r = await safeGet(SITE_URL_KEY);
+    return r ? (JSON.parse(r.value).url || "") : "";
+  }catch(e){ return ""; }
+}
+
+// safeSave rewrites the whole array, so two attendees submitting at the same
+// instant could overwrite each other. Re-read, merge, write, then verify the
+// row actually landed; retry with jitter if it didn't.
+async function appendFeedback(sid, entry){
+  for(let attempt=0; attempt<3; attempt++){
+    const r = await safeGet(fbKey(sid));
+    let list = [];
+    try{ list = r ? JSON.parse(r.value) : []; }catch(e){ list = []; }
+    const i = list.findIndex(f => (f.email||"").toLowerCase() === entry.email);
+    if(i >= 0) list[i] = { ...list[i], ...entry, updatedAt: new Date().toISOString() };
+    else       list.push(entry);
+    if(await safeSave(fbKey(sid), list)){
+      const v = await safeGet(fbKey(sid));
+      try{
+        const back = v ? JSON.parse(v.value) : [];
+        if(back.some(f => (f.email||"").toLowerCase() === entry.email)) return true;
+      }catch(e){}
+    }
+    await new Promise(res => setTimeout(res, 400 + Math.random()*700));
+  }
+  return false;
+}
+
+const DEFAULT_FEEDBACK_TEMPLATE = {
+  subject: "Thanks for joining {{session_title}}",
+  body: "Hi {{first_name}},\n\nThank you for joining {{session_title}} on {{session_date}}. We hope you took something useful away from it.\n\nWe'd really value your feedback \u2014 it takes under a minute, and it shapes how we run the next session:\n\n{{feedback_link}}\n\nYour email is already filled in, so you only need to add your rating and comments.\n\nThanks,\nAnubhav"
+};
+
 
 // ── Email banner: compress + CID embedding ──────────────────────────────────
 // A raw poster data-URL is far too large for an email body (and Gmail/Outlook
@@ -875,6 +999,195 @@ function RegisterView(){
 }
 
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEEDBACK  (public-facing) — opened from the link in the thank-you email
+// ═══════════════════════════════════════════════════════════════════════════
+function StarPicker({value,onChange,readOnly,size=22}){
+  const [hover,setHover]=useState(0);
+  const active = hover || value || 0;
+  return(
+    <div style={{display:"flex",gap:6,alignItems:"center"}} onMouseLeave={()=>setHover(0)}>
+      {[1,2,3,4,5].map(n=>(
+        <button key={n} type="button" data-testid={"star-"+n} disabled={readOnly}
+          onMouseEnter={()=>{if(!readOnly)setHover(n);}}
+          onClick={()=>{if(!readOnly&&onChange)onChange(n);}}
+          aria-label={n+" out of 5"}
+          style={{background:"transparent",border:"none",padding:0,lineHeight:0,cursor:readOnly?"default":"pointer",transition:"transform 200ms cubic-bezier(0.4,0,0.2,1)",transform:(!readOnly&&hover===n)?"scale(1.12)":"none"}}>
+          <Star size={size} strokeWidth={1.6} color={n<=active?C.accent:"rgba(255,255,255,0.22)"} fill={n<=active?C.accent:"none"}/>
+        </button>
+      ))}
+      {value>0&&<span style={{fontSize:12,color:C.textFaint,marginLeft:4,fontFamily:"monospace"}}>{value}/5</span>}
+    </div>
+  );
+}
+
+function FeedbackView({sid,email,token}){
+  const [loading,setLoading]=useState(true);
+  const [fatal,setFatal]=useState("");
+  const [sess,setSess]=useState(null);
+  const [name,setName]=useState("");
+  const [role,setRole]=useState("");
+  const [rating,setRating]=useState(0);
+  const [comment,setComment]=useState("");
+  const [better,setBetter]=useState("");
+  const [prior,setPrior]=useState(false);
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [done,setDone]=useState(false);
+
+  useEffect(()=>{ let off=false; (async()=>{
+    setLoading(true);
+    if(!sid||!email){
+      if(!off){ setFatal("This feedback link is incomplete. Please use the link in your email, or ask the organiser to resend it."); setLoading(false); }
+      return;
+    }
+    const sr=await safeGet(SESSIONS_KEY);
+    let list=[]; try{ list=sr?JSON.parse(sr.value):[]; }catch(e){}
+    const s=list.find(x=>x.id===sid);
+    if(!s){
+      if(!off){ setFatal("We couldn't find that session. It may have been removed."); setLoading(false); }
+      return;
+    }
+    if(!off) setSess(s);
+
+    const rr=await safeGet(regKey(sid));
+    let regs=[]; try{ regs=rr?JSON.parse(rr.value):[]; }catch(e){}
+    const reg=regs.find(r=>(r.email||"").toLowerCase()===email);
+
+    const tr=await safeGet(fbTokKey(sid));
+    let toks={}; try{ toks=tr?JSON.parse(tr.value):{}; }catch(e){}
+    const hasTokens=Object.keys(toks).length>0;
+
+    // Accept when the token matches the email it was issued to. If no tokens
+    // exist for this session (link shared by hand), fall back to requiring the
+    // email to be on the attendee list.
+    const tokenOk=!!token && toks[email]===token;
+    const listOk=!hasTokens && !!reg;
+    if(!tokenOk && !listOk){
+      if(!off){ setFatal("This link isn't valid for that email address. Please open the link from your own invitation email, or contact the organiser."); setLoading(false); }
+      return;
+    }
+    if(reg&&!off){ setName(reg.name||""); setRole(reg.role||""); }
+
+    const fr=await safeGet(fbKey(sid));
+    let fbs=[]; try{ fbs=fr?JSON.parse(fr.value):[]; }catch(e){}
+    const mine=fbs.find(f=>(f.email||"").toLowerCase()===email);
+    if(mine&&!off){
+      setPrior(true);
+      setRating(mine.rating||0);
+      setComment(mine.comment||"");
+      setBetter(mine.suggestion||"");
+      if(mine.name&&!reg) setName(mine.name);
+    }
+    if(!off) setLoading(false);
+  })(); return ()=>{ off=true; }; },[sid,email,token]);
+
+  const submit=async()=>{
+    setErr("");
+    if(!rating){ setErr("Please pick a rating."); return; }
+    if(!comment.trim()){ setErr("Please tell us what worked well."); return; }
+    setBusy(true);
+    const ok=await appendFeedback(sid,{
+      id:uid(), sid, email,
+      name:name.trim(), role:role.trim(), rating,
+      comment:comment.trim(), suggestion:better.trim(),
+      submittedAt:new Date().toISOString(),
+    });
+    setBusy(false);
+    if(ok) setDone(true);
+    else setErr("We couldn't save your feedback just now. Please try again in a moment.");
+  };
+
+  const card={...glass,width:"100%",maxWidth:520,padding:32};
+
+  if(loading) return(
+    <div className="rpad" style={{...card,display:"flex",alignItems:"center",justifyContent:"center",gap:8,color:C.textFaint}}>
+      <Loader2 size={16} className="animate-spin"/>Loading...
+    </div>
+  );
+
+  if(fatal) return(
+    <div className="rpad" data-testid="feedback-invalid" style={card}>
+      <div className="reg-eyebrow"><span style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Feedback</span></div>
+      <h1 style={{fontSize:20,fontWeight:600,marginBottom:12}}>We can't open this link</h1>
+      <p style={{fontSize:13,color:C.textDim,lineHeight:1.7,margin:0}}>{fatal}</p>
+    </div>
+  );
+
+  if(done) return(
+    <div className="rpad" data-testid="feedback-success" style={card}>
+      <div style={{width:44,height:44,borderRadius:"50%",background:`${C.success}1A`,border:`1px solid ${C.success}4D`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}>
+        <Check size={20} color={C.success}/>
+      </div>
+      <h1 style={{fontSize:20,fontWeight:600,marginBottom:8}}>Thank you</h1>
+      <p style={{fontSize:13,color:C.textDim,lineHeight:1.7,margin:0}}>
+        Your feedback for <strong style={{color:C.text}}>{sess?sess.title:""}</strong> has been recorded. It goes straight to the team planning the next session.
+      </p>
+    </div>
+  );
+
+  const lbl={display:"block",fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em",marginBottom:6,textTransform:"uppercase"};
+
+  return(
+    <div className="rpad" data-testid="feedback-form" style={card}>
+      <div className="reg-eyebrow">
+        <span style={{fontFamily:"monospace",fontSize:11,letterSpacing:"0.15em",color:C.accent,textTransform:"uppercase"}}>Your feedback</span>
+      </div>
+      <h1 style={{fontSize:20,fontWeight:600,marginBottom:4}}>{sess?sess.title:""}</h1>
+      <p style={{fontSize:12,color:C.textFaint,marginBottom:20}}>{sessionWhen(sess)||""}</p>
+
+      {prior&&(
+        <div style={{display:"flex",gap:8,fontSize:12,color:C.warn,background:`${C.warn}1A`,border:`1px solid ${C.warn}4D`,borderRadius:10,padding:"10px 14px",marginBottom:18,lineHeight:1.6}}>
+          <AlertCircle size={15} style={{flexShrink:0,marginTop:1}}/>
+          You've already sent feedback for this session. You can update your answers below.
+        </div>
+      )}
+
+      <div style={{display:"grid",gap:18}}>
+        <div>
+          <label style={lbl}>Your email</label>
+          <input data-testid="feedback-email" value={email} readOnly style={{...iSty,background:"rgba(255,255,255,0.02)",color:C.textDim,cursor:"not-allowed"}}/>
+          <p style={{fontSize:11,color:C.textFaint,marginTop:6}}>Filled in from your invitation — this can't be changed here.</p>
+        </div>
+        <div>
+          <label style={lbl}>Your name</label>
+          <input data-testid="feedback-name" value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" style={iSty} onFocus={fi} onBlur={fo}/>
+        </div>
+        <div>
+          <label style={lbl}>How would you rate the session?</label>
+          <StarPicker value={rating} onChange={setRating}/>
+        </div>
+        <div>
+          <label style={lbl}>What worked well?</label>
+          <textarea data-testid="feedback-comment" value={comment} onChange={e=>setComment(e.target.value)} rows={4}
+            placeholder="The part you found most useful..."
+            style={{...iSty,resize:"vertical",fontFamily:"inherit",lineHeight:1.6}} onFocus={fi} onBlur={fo}/>
+        </div>
+        <div>
+          <label style={lbl}>What could be better? <span style={{color:"rgba(255,255,255,0.25)"}}>(optional)</span></label>
+          <textarea data-testid="feedback-suggestion" value={better} onChange={e=>setBetter(e.target.value)} rows={3}
+            placeholder="Anything you'd change for next time..."
+            style={{...iSty,resize:"vertical",fontFamily:"inherit",lineHeight:1.6}} onFocus={fi} onBlur={fo}/>
+        </div>
+
+        {err&&<p style={{fontSize:12,color:C.error,margin:0}}>{err}</p>}
+
+        <button data-testid="feedback-submit" onClick={submit} disabled={busy}
+          className={busy?"":"neon-glow"}
+          onMouseEnter={e=>{if(!busy)ctaHover(e);}} onMouseLeave={ctaLeave}
+          style={{width:"100%",background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"12px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:busy?"default":"pointer",opacity:busy?.6:1,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+          {busy?<><Loader2 size={14} className="animate-spin"/>Submitting...</>:(prior?"Update my feedback":"Submit feedback")}
+        </button>
+        <p style={{fontSize:11,color:C.textFaint,textAlign:"center",margin:0}}>
+          Your responses are shared only with the organising team.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
 function AdminView(){
   const __restored = loadAdminSession();
   const [authed,setAuthed]=useState(!!__restored);
@@ -914,6 +1227,7 @@ function AdminView(){
   if(can("registrations")) visibleTabs.push(["registrations","Registrations"]);
   if(can("activity"))      visibleTabs.push(["activity","Activity"]);
   if(can("emails"))        visibleTabs.push(["emails","Emails"]);
+  if(can("feedback"))      visibleTabs.push(["feedback","Feedback"]);
   if(isSuper)              visibleTabs.push(["permissions","Permissions"]);
   visibleTabs.push(["settings","Settings"]); // always available (self-service passcode)
 
@@ -987,6 +1301,7 @@ function AdminView(){
       {tab==="registrations"&&can("registrations")&&<RegistrationsTab me={me} sessions={sessions} allRegs={allRegs} setAllRegs={setAllRegs} selSid={selSid} setSelSid={setSelSid} loading={dl} reload={loadAll}/>}
       {tab==="activity"&&can("activity")&&<ActivityTab me={me} isSuper={isSuper}/>}
       {tab==="emails"&&can("emails")&&<EmailsTab me={me} sessions={sessions} allRegs={allRegs}/>}
+      {tab==="feedback"&&can("feedback")&&<FeedbackTab me={me} sessions={sessions} allRegs={allRegs}/>}
       {tab==="permissions"&&isSuper&&<PermissionsTab me={me} admins={admins} setAdmins={setAdmins} reload={loadAll}/>}
       {tab==="settings"&&<SettingsTab admins={admins} setAdmins={setAdmins} me={me} isSuper={isSuper} perms={perms} setAuthed={setAuthed} setMe={setMe}/>}
     </div>
@@ -1771,6 +2086,172 @@ function ActivityTab({me,isSuper}){
 
 
 // ── Scheduled emails ─────────────────────────────────────────────────────────
+
+function FeedbackTab({me,sessions,allRegs}){
+  const [sid,setSid]=useState((( sessions.find(s=>s.active) || sessions[0] )||{}).id||"");
+  const [list,setList]=useState([]);
+  const [invited,setInvited]=useState(0);
+  const [loading,setLoading]=useState(true);
+  const [query,setQuery]=useState("");
+  const [confDel,setConfDel]=useState(null);
+  const [err,setErr]=useState("");
+
+  const load=useCallback(async(id)=>{
+    if(!id){ setList([]); setInvited(0); setLoading(false); return; }
+    setLoading(true); setErr("");
+    const fr=await safeGet(fbKey(id));
+    try{ setList(fr?JSON.parse(fr.value):[]); }catch(e){ setList([]); }
+    const tr=await safeGet(fbTokKey(id));
+    try{ setInvited(tr?Object.keys(JSON.parse(tr.value)).length:0); }catch(e){ setInvited(0); }
+    setLoading(false);
+  },[]);
+  useEffect(()=>{ load(sid); },[sid,load]);
+
+  const sess=sessions.find(s=>s.id===sid);
+  const regCount=(allRegs[sid]||[]).length;
+
+  const display=useMemo(()=>{
+    const rev=[...list].sort((a,b)=>String(b.submittedAt||"").localeCompare(String(a.submittedAt||"")));
+    const q=query.trim().toLowerCase();
+    if(!q) return rev;
+    return rev.filter(f=>[f.name,f.email,f.role,f.comment,f.suggestion].some(v=>(v||"").toLowerCase().includes(q)));
+  },[list,query]);
+
+  const rated=list.filter(f=>Number(f.rating)>0);
+  const avg=rated.length?(rated.reduce((s,f)=>s+Number(f.rating),0)/rated.length):null;
+
+  const del=async(email)=>{
+    setErr("");
+    const next=list.filter(f=>(f.email||"").toLowerCase()!==(email||"").toLowerCase());
+    if(await safeSave(fbKey(sid),next)){
+      setList(next); setConfDel(null);
+      await logActivity(me?.name,"Deleted feedback response",`${email} · ${sess?sess.title:sid}`);
+    } else setErr("Couldn't delete. Please try again.");
+  };
+
+  const exportCsv=()=>{
+    const hdr=["Submitted","Name","Email","Role","Rating","What worked well","What could be better"];
+    const rows=display.map(f=>[fmt(f.submittedAt),f.name,f.email,f.role,f.rating,f.comment,f.suggestion]);
+    const csv=[hdr,...rows].map(r=>r.map(csvCell).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=`feedback-${String((sess&&sess.title)||sid).replace(/[^a-z0-9]+/gi,"-").toLowerCase()}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const stat=(label,value,note)=>(
+    <div style={{...glass,padding:"14px 16px",flex:"1 1 140px",minWidth:130}}>
+      <p style={{fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",textTransform:"uppercase",margin:0}}>{label}</p>
+      <p style={{fontSize:22,fontWeight:700,margin:"6px 0 0"}}>{value}</p>
+      {note&&<p style={{fontSize:11,color:C.textFaint,margin:"3px 0 0"}}>{note}</p>}
+    </div>
+  );
+
+  return(
+    <div data-testid="feedback-tab" style={{display:"grid",gap:16}}>
+      <div style={{...glass,padding:24,display:"grid",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:180}}>
+            <p style={{fontSize:15,fontWeight:600,margin:0}}>Session feedback</p>
+            <p style={{fontSize:12,color:C.textFaint,margin:"3px 0 0"}}>Responses submitted from the feedback link.</p>
+          </div>
+          <button data-testid="feedback-refresh" onClick={()=>load(sid)} onMouseEnter={secHover} onMouseLeave={secLeave}
+            style={{background:"transparent",color:C.textFaint,fontSize:12,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 12px",cursor:"pointer",transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
+            Refresh
+          </button>
+          <button data-testid="feedback-export" onClick={exportCsv} disabled={display.length===0}
+            onMouseEnter={e=>{if(display.length)secHover(e);}} onMouseLeave={secLeave}
+            style={{background:"transparent",color:C.textFaint,fontSize:12,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 12px",cursor:display.length?"pointer":"default",opacity:display.length?1:.5,display:"flex",alignItems:"center",gap:6,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
+            <Download size={13}/>Export CSV
+          </button>
+        </div>
+
+        <div>
+          <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION</label>
+          <select data-testid="feedback-session-select" value={sid} onChange={e=>setSid(e.target.value)}
+            style={{...iSty,marginTop:5,appearance:"none"}} onFocus={fi} onBlur={fo}>
+            {sessions.length===0&&<option value="">No sessions yet</option>}
+            {sessions.map(s=>(<option key={s.id} value={s.id} style={{background:C.bgPanel}}>{s.title}</option>))}
+          </select>
+        </div>
+
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {stat("Responses", list.length, invited?`${invited} invited`:`${regCount} registrant${regCount===1?"":"s"}`)}
+          {stat("Average rating", avg===null?"—":avg.toFixed(1), avg===null?"No ratings yet":`from ${rated.length} rating${rated.length===1?"":"s"}`)}
+          {stat("Response rate", invited?`${Math.round((list.length/invited)*100)}%`:"—", invited?"of invited attendees":"No requests sent yet")}
+        </div>
+
+        <input data-testid="feedback-search" value={query} onChange={e=>setQuery(e.target.value)}
+          placeholder="Search names, emails or comments..." style={iSty} onFocus={fi} onBlur={fo}/>
+        {err&&<p style={{fontSize:12,color:C.error,margin:0}}>{err}</p>}
+      </div>
+
+      {loading?(
+        <div style={{...glass,padding:28,display:"flex",alignItems:"center",gap:8,color:C.textFaint,justifyContent:"center"}}>
+          <Loader2 size={16} className="animate-spin"/>Loading...
+        </div>
+      ):display.length===0?(
+        <div style={{...glass,padding:"40px 24px",textAlign:"center"}}>
+          <MessageSquare size={22} color={C.border} style={{margin:"0 auto 10px"}}/>
+          <p style={{fontSize:14,color:C.textFaint,margin:0}}>
+            {list.length===0
+              ? "No feedback yet for this session. Send a feedback request from the Emails tab."
+              : "No responses match that search."}
+          </p>
+        </div>
+      ):(
+        <div style={{display:"grid",gap:12}}>
+          {display.map(f=>{
+            const isDel=confDel===f.email;
+            return(
+              <div key={f.email} data-testid={"feedback-row-"+f.email} style={{...glass,padding:20,display:"grid",gap:10}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:180}}>
+                    <p style={{fontSize:14,fontWeight:600,margin:0}}>{f.name||"—"}</p>
+                    <p style={{fontSize:12,color:C.textFaint,margin:"2px 0 0"}}>{f.email}{f.role?` · ${f.role}`:""}</p>
+                    <p style={{fontSize:11,color:C.textFaint,fontFamily:"monospace",margin:"4px 0 0"}}>{fmt(f.submittedAt)}{f.updatedAt?" · edited":""}</p>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                    <StarPicker value={Number(f.rating)||0} readOnly size={16}/>
+                    {isDel?(
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <span style={{fontSize:12,color:C.error}}>Delete?</span>
+                        <button data-testid={"feedback-del-confirm-"+f.email} onClick={()=>del(f.email)}
+                          style={{fontSize:12,background:C.error,color:"#fff",fontWeight:600,border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer"}}>Confirm</button>
+                        <button onClick={()=>setConfDel(null)}
+                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><X size={12}/></button>
+                      </div>
+                    ):(
+                      <button data-testid={"feedback-del-"+f.email} onClick={()=>setConfDel(f.email)} title="Delete response"
+                        style={{background:"transparent",border:`1px solid ${C.error}66`,color:C.error,borderRadius:6,padding:"4px 7px",cursor:"pointer",display:"flex"}}><Trash2 size={12}/></button>
+                    )}
+                  </div>
+                </div>
+                {f.comment&&(
+                  <div>
+                    <p style={{fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",textTransform:"uppercase",margin:0}}>What worked well</p>
+                    <p style={{fontSize:13,color:C.textDim,lineHeight:1.7,margin:"4px 0 0",whiteSpace:"pre-wrap"}}>{f.comment}</p>
+                  </div>
+                )}
+                {f.suggestion&&(
+                  <div>
+                    <p style={{fontFamily:"monospace",fontSize:10,color:C.textFaint,letterSpacing:"0.08em",textTransform:"uppercase",margin:0}}>What could be better</p>
+                    <p style={{fontSize:13,color:C.textDim,lineHeight:1.7,margin:"4px 0 0",whiteSpace:"pre-wrap"}}>{f.suggestion}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // Schedules live in two places by design: app storage (for this editable list)
 // and the Apps Script's Script Properties (what actually fires). Every save or
 // delete here also posts the change to the Apps Script. The browser cannot read
@@ -1955,6 +2436,192 @@ function ScheduledEmails({me,sessions,allRegs,cfgUrl}){
     </div>
   );
 }
+
+// Post-session thank-you + feedback request. Each attendee gets a single-use
+// token so the form can pre-fill their email without trusting the URL.
+function FeedbackSender({me,sessions,allRegs,cfgUrl}){
+  const [loading,setLoading]=useState(true);
+  const [siteUrl,setSiteUrl]=useState("");
+  const [sid,setSid]=useState(sessions[0]?.id||"");
+  const [checked,setChecked]=useState(()=>new Set());
+  const [subject,setSubject]=useState("");
+  const [body,setBody]=useState("");
+  const [sending,setSending]=useState(false);
+  const [progress,setProgress]=useState({done:0,total:0});
+  const [msg,setMsg]=useState(""); const [err,setErr]=useState("");
+
+  const regs=allRegs[sid]||[];
+
+  useEffect(()=>{(async()=>{
+    setSiteUrl(await loadSiteUrl());
+    let t=DEFAULT_FEEDBACK_TEMPLATE;
+    try{
+      const tr=await safeGet(FEEDBACK_TPL_KEY);
+      t=tr?{...DEFAULT_FEEDBACK_TEMPLATE,...JSON.parse(tr.value)}:DEFAULT_FEEDBACK_TEMPLATE;
+    }catch(e){}
+    setSubject(t.subject||DEFAULT_FEEDBACK_TEMPLATE.subject);
+    setBody(t.body||DEFAULT_FEEDBACK_TEMPLATE.body);
+    setLoading(false);
+  })();},[]);
+
+  useEffect(()=>{ setChecked(new Set()); setMsg(""); setErr(""); },[sid]);
+
+  const toggle=(e)=>setChecked(p=>{const n=new Set(p); if(n.has(e))n.delete(e); else n.add(e); return n;});
+  const allOn=regs.length>0&&regs.every(r=>checked.has(r.email));
+  const toggleAll=()=>setChecked(allOn?new Set():new Set(regs.map(r=>r.email)));
+
+  const send=async()=>{
+    setErr(""); setMsg("");
+    if(!cfgUrl){ setErr("No Apps Script URL configured. Set it in Settings first."); return; }
+    if(!siteUrl){ setErr("No public site URL configured. Set it in Settings first — without it the feedback link in the email won't work."); return; }
+    const targets=regs.filter(r=>checked.has(r.email));
+    if(targets.length===0){ setErr("Select at least one attendee."); return; }
+    if(!subject.trim()){ setErr("Enter a subject."); return; }
+    if(!/\{\{feedback_link\}\}/.test(body)){ setErr("The body must include {{feedback_link}} — otherwise there's no way for attendees to reach the form."); return; }
+
+    await safeSave(FEEDBACK_TPL_KEY,{subject,body});
+
+    // Issue one token per attendee and store the map BEFORE sending, so no
+    // link can land in an inbox before its token exists.
+    const tr=await safeGet(fbTokKey(sid));
+    let toks={}; try{ toks=tr?JSON.parse(tr.value):{}; }catch(e){}
+    for(const r of targets){ if(!toks[r.email]) toks[r.email]=uid(); }
+    if(!await safeSave(fbTokKey(sid),toks)){
+      setErr("Couldn't save the feedback links. Nothing was sent — please try again.");
+      return;
+    }
+
+    const sess=sessions.find(s=>s.id===sid);
+    const bn=(sess&&sess.banner)?await makeEmailBanner(sess.banner):null; // compress once, reuse per recipient
+    setSending(true); setProgress({done:0,total:targets.length});
+    for(let i=0;i<targets.length;i++){
+      const r=targets[i];
+      const link=buildFeedbackLink(siteUrl,sid,r.email,toks[r.email]);
+      const vars={ ...personVars(r), session_title:(sess&&sess.title)||"", session_date:sessionWhen(sess), feedback_link:feedbackCtaHtml(link) };
+      const subj=renderTemplate(subject,vars);
+      const inner=renderTemplate(body,vars).replace(/\n/g,"<br>");
+      const html=buildBrandedEmail({subject:subj,bodyHtml:inner,eyebrow:"Thank you for attending",sessionTitle:vars.session_title,sessionDate:vars.session_date,bannerSrc:bn?"cid:banner":""});
+      const payload={type:"feedback",to_email:r.email,to_name:r.name,subject:subj,html};
+      if(bn){ payload.banner_b64=bn.b64; payload.banner_mime=bn.mime; }
+      try{ await postToAppsScript({url:cfgUrl},payload); }catch(e){}
+      setProgress({done:i+1,total:targets.length});
+      await new Promise(res=>setTimeout(res,250)); // gentle pacing for Apps Script quotas
+    }
+    await logActivity(me?.name,"Sent feedback request",`${targets.length} recipient(s) · ${sess?sess.title:sid}`);
+    setSending(false);
+    setMsg(`Dispatched ${targets.length} email(s). Delivery can't be confirmed from the browser — check your Apps Script executions.`);
+  };
+
+  if(loading) return null;
+
+  const sec={...glass,padding:24,display:"grid",gap:12};
+  const sess=sessions.find(s=>s.id===sid)||{};
+  const previewVars={
+    ...personVars(regs[0]||{name:"Ada Lovelace",firstName:"Ada",lastName:"Lovelace",role:"Engineer",email:"ada@example.com"}),
+    session_title:sess.title||"", session_date:sessionWhen(sess),
+    feedback_link:feedbackCtaHtml(buildFeedbackLink(siteUrl||"https://example.com",sid||"SESSION_ID",(regs[0]&&regs[0].email)||"ada@example.com","sample-token")),
+  };
+  const preview=buildBrandedEmail({
+    subject:renderTemplate(subject,previewVars),
+    bodyHtml:renderTemplate(body,previewVars).replace(/\n/g,"<br>"),
+    eyebrow:"Thank you for attending",
+    sessionTitle:previewVars.session_title, sessionDate:previewVars.session_date,
+    bannerSrc:sess.banner||"",
+  });
+  const disabled=sending||!cfgUrl||!siteUrl||checked.size===0;
+
+  return(
+    <div data-testid="feedback-sender" style={sec}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <MessageSquare size={15} color={C.accent}/>
+        <p style={{fontSize:15,fontWeight:600,margin:0}}>Thank-you &amp; feedback request</p>
+      </div>
+      <p style={{fontSize:12,color:C.textFaint,margin:0,lineHeight:1.6}}>
+        Send after the session. Each attendee gets a personal link — their email is filled in for them and can't be changed on the form.
+      </p>
+
+      {!siteUrl&&(
+        <div style={{display:"flex",gap:8,fontSize:13,color:C.warn,background:`${C.warn}1A`,border:`1px solid ${C.warn}4D`,borderRadius:10,padding:"10px 14px"}}>
+          <AlertCircle size={15} style={{flexShrink:0,marginTop:1}}/>
+          No public site URL set. Add it under <strong>&nbsp;Settings&nbsp;</strong> or the feedback link won't resolve for attendees.
+        </div>
+      )}
+
+      <div>
+        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SESSION</label>
+        <select data-testid="feedback-send-session" value={sid} onChange={e=>setSid(e.target.value)}
+          style={{...iSty,marginTop:5,appearance:"none"}} onFocus={fi} onBlur={fo}>
+          {sessions.length===0&&<option value="">No sessions yet</option>}
+          {sessions.map(s=>(<option key={s.id} value={s.id} style={{background:C.bgPanel}}>{s.title}</option>))}
+        </select>
+      </div>
+
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:8}}>
+          <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>ATTENDEES ({checked.size}/{regs.length} SELECTED)</label>
+          <button onClick={toggleAll} disabled={regs.length===0} onMouseEnter={e=>{if(regs.length)secHover(e);}} onMouseLeave={secLeave}
+            style={{background:"transparent",color:C.textFaint,fontSize:12,border:`1px solid ${C.border}`,borderRadius:10,padding:"5px 10px",cursor:regs.length?"pointer":"default",opacity:regs.length?1:.5,transition:"all 500ms cubic-bezier(0.4,0,0.2,1)"}}>
+            {allOn?"Clear all":"Select all"}
+          </button>
+        </div>
+        {regs.length===0?(
+          <div style={{textAlign:"center",padding:"22px 0",border:`1px dashed ${C.border}`,borderRadius:12,fontSize:13,color:C.textFaint}}>
+            No registrants for this session yet.
+          </div>
+        ):(
+          <div className="rfs" style={{maxHeight:190,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:12,background:"rgba(255,255,255,0.02)"}}>
+            {regs.map(r=>(
+              <label key={r.email} data-testid={"feedback-recip-"+r.email}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:13}}>
+                <input type="checkbox" checked={checked.has(r.email)} onChange={()=>toggle(r.email)} style={{accentColor:C.accent,width:15,height:15,flexShrink:0}}/>
+                <span style={{fontWeight:600,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</span>
+                <span style={{color:C.textFaint,fontSize:12,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.email}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SUBJECT</label>
+        <input data-testid="feedback-subject" value={subject} onChange={e=>setSubject(e.target.value)} style={{...iSty,marginTop:5}} onFocus={fi} onBlur={fo}/>
+      </div>
+      <div>
+        <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>BODY</label>
+        <textarea data-testid="feedback-body" value={body} onChange={e=>setBody(e.target.value)} rows={9}
+          style={{...iSty,marginTop:5,resize:"vertical",fontFamily:"inherit",lineHeight:1.6}} onFocus={fi} onBlur={fo}/>
+      </div>
+      <p style={{fontSize:11,color:C.textFaint,lineHeight:1.6,margin:0}}>
+        Placeholders: {FEEDBACK_PLACEHOLDERS.map(p=>(<span key={p} style={{fontFamily:"monospace",color:C.accent,marginRight:8}}>{`{{${p}}}`}</span>))}
+      </p>
+      <p style={{fontSize:11,color:C.textFaint,lineHeight:1.6,margin:0}}>
+        <span style={{fontFamily:"monospace",color:C.accent}}>{"{{feedback_link}}"}</span> is required — it becomes the button attendees tap.
+      </p>
+
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>PREVIEW</label>
+          <span style={{fontSize:10,color:C.textFaint}}>sample data</span>
+        </div>
+        <iframe data-testid="feedback-preview" title="Feedback email preview" srcDoc={preview}
+          style={{width:"100%",height:440,border:`1px solid ${C.border}`,borderRadius:12,background:"#1b3a5c"}}/>
+      </div>
+
+      {err&&<p style={{fontSize:12,color:C.error,margin:0}}>{err}</p>}
+      {msg&&<p style={{fontSize:12,color:C.success,margin:0,lineHeight:1.6}}>{msg}</p>}
+
+      <button data-testid="feedback-send-btn" onClick={send} disabled={disabled}
+        className={disabled?"":"neon-glow"}
+        onMouseEnter={e=>{if(!disabled)ctaHover(e);}} onMouseLeave={ctaLeave}
+        style={{background:C.accent,color:C.bg,fontWeight:700,fontSize:14,border:"none",borderRadius:12,padding:"11px 16px",cursor:disabled?"default":"pointer",opacity:disabled?.5:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"fit-content",transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+        {sending
+          ? <><Loader2 size={14} className="animate-spin"/>Sending {progress.done}/{progress.total}...</>
+          : <><Send size={14}/>Send to {checked.size} selected</>}
+      </button>
+    </div>
+  );
+}
+
 
 function EmailsTab({me,sessions,allRegs}){
   const [loading,setLoading]=useState(true);
@@ -2313,6 +2980,9 @@ function EmailsTab({me,sessions,allRegs}){
         </button>
       </div>
 
+      {/* ── Thank-you & feedback request ── */}
+      <FeedbackSender me={me} sessions={sessions} allRegs={allRegs} cfgUrl={cfgUrl}/>
+
       {/* ── Scheduled emails ── */}
       <ScheduledEmails me={me} sessions={sessions} allRegs={allRegs} cfgUrl={cfgUrl}/>
     </div>
@@ -2435,6 +3105,13 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
   const [asBusy,      setAsBusy]      = useState(false);
   const [asLoaded,    setAsLoaded]    = useState(false);
 
+  // Public site URL — feedback links in emails are built from it.
+  const [siteUrl,   setSiteUrl]   = useState("");
+  const [siteErr,   setSiteErr]   = useState("");
+  const [siteOk,    setSiteOk]    = useState("");
+  const [siteBusy,  setSiteBusy]  = useState(false);
+  const [siteLoaded,setSiteLoaded]= useState(false);
+
   useEffect(()=>{
     (async()=>{
       const r = await safeGet(EMAIL_CFG_KEY);
@@ -2442,6 +3119,27 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
       setAsLoaded(true);
     })();
   },[]);
+
+  useEffect(()=>{
+    (async()=>{
+      const v = await loadSiteUrl();
+      if(v) setSiteUrl(v);
+      else if(typeof window!=="undefined") setSiteUrl(window.location.origin);
+      setSiteLoaded(true);
+    })();
+  },[]);
+
+  const saveSite = async () => {
+    setSiteErr(""); setSiteOk("");
+    const v = siteUrl.trim().replace(/\/+$/,"");
+    if(!/^https?:\/\/.+/i.test(v)){ setSiteErr("Enter the full URL, including https://"); return; }
+    setSiteBusy(true);
+    if(await safeSave(SITE_URL_KEY,{url:v})){
+      setSiteUrl(v); setSiteOk("Saved.");
+      await logActivity(me?.name,"Updated public site URL",v);
+    } else setSiteErr("Failed to save. Try again.");
+    setSiteBusy(false);
+  };
 
   const saveAs = async () => {
     setAsErr(""); setAsOk("");
@@ -2575,6 +3273,39 @@ function SettingsTab({admins,setAdmins,me,isSuper,perms,setAuthed,setMe}){
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <button data-testid="settings-save-btn" onClick={saveAs} disabled={asBusy} onMouseEnter={e=>{if(!asBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:asBusy?"default":"pointer",opacity:asBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
                 {asBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save settings"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      )}
+
+      {/* Public site URL — used to build feedback links */}
+      {canSettings && (
+      <div style={sec}>
+        <p style={slbl}>Public site URL</p>
+        <p style={{fontSize:12,color:C.textFaint,lineHeight:1.6,marginBottom:10}}>
+          The address attendees use to reach this app. Feedback links in the thank-you email are built from it,
+          so they break if it's wrong. It should be the address you see in the browser when this page is live.
+        </p>
+        {!siteLoaded ? <p style={{fontSize:12,color:C.textFaint}}>Loading...</p> : (
+          <>
+            <div>
+              <label style={{fontFamily:"monospace",fontSize:11,color:C.textFaint,letterSpacing:"0.08em"}}>SITE URL</label>
+              <input
+                data-testid="site-url-input"
+                value={siteUrl}
+                onChange={e=>{setSiteUrl(e.target.value);setSiteErr("");setSiteOk("");}}
+                placeholder="https://your-app.example.com"
+                style={{...iSty,marginTop:5,fontSize:12}}
+                onFocus={fi} onBlur={fo}
+              />
+            </div>
+            {siteErr&&<p style={{fontSize:12,color:C.error}}>{siteErr}</p>}
+            {siteOk&&<p style={{fontSize:12,color:C.success}}>{siteOk}</p>}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button data-testid="site-url-save" onClick={saveSite} disabled={siteBusy} onMouseEnter={e=>{if(!siteBusy)ctaHover(e);}} onMouseLeave={ctaLeave} style={{background:C.accent,color:C.bg,fontWeight:600,fontSize:13,border:"none",borderRadius:12,padding:"8px 14px",cursor:siteBusy?"default":"pointer",opacity:siteBusy?.6:1,display:"flex",alignItems:"center",gap:6,transition:"all 300ms cubic-bezier(0.4,0,0.2,1)"}}>
+                {siteBusy?<><Loader2 size={13} className="animate-spin"/>Saving...</>:"Save site URL"}
               </button>
             </div>
           </>
