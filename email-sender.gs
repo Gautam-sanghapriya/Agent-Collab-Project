@@ -5,6 +5,12 @@
  *   • doPost — confirmation + bulk emails, and email-schedule commands
  *   • processSchedules — time-driven trigger: sends scheduled emails
  *
+ * ATTACHMENTS (bulk email only): the app can upload a .zip to Supabase
+ * Storage and send its public URL along as `materials_url` (+ `materials_name`
+ * for the filename). This script fetches that URL itself and attaches the
+ * real bytes to the email — the browser never sends the file's bytes over
+ * the wire more than once, regardless of how many recipients there are.
+ *
  * DEPLOY:
  *   1. https://script.google.com → paste this file.
  *   2. Deploy → New deployment → "Web app"
